@@ -1,6 +1,6 @@
 import {
   isRouteErrorResponse,
-  Link, // 1. Tambahan: Import Link untuk menu navigasi
+  Link,
   Links,
   Meta,
   Outlet,
@@ -10,9 +10,19 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { Button } from "~/components/ui/button"; // 2. Tambahan: Import Button Shadcn
+import { Button } from "~/components/ui/button";
 import { ThemeProvider } from "~/components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
+
+// 1. IMPORT IKON MENU & KOMPONEN SHEET
+import { Menu } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from "~/components/ui/sheet";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -27,7 +37,6 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-// Komponen Layout: Membungkus seluruh aplikasi, termasuk saat terjadi error
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -37,14 +46,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      {/* 3. Tambahan: Class Tailwind untuk membuat layout full-height (min-h-screen) */}
       <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
         <ThemeProvider>
           {/* === HEADER / NAVBAR GLOBAL === */}
           <header className="border-b sticky top-0 bg-background/90 backdrop-blur z-50">
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
               <div className="font-bold text-xl tracking-tight">LearnReact</div>
-              <nav className="flex items-center gap-4">
+
+              {/* === NAVIGASI DESKTOP (Disembunyikan di layar kecil) === */}
+              <nav className="hidden md:flex items-center gap-4">
                 <Button asChild variant="ghost">
                   <Link to="/">Dashboard</Link>
                 </Button>
@@ -55,15 +65,44 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <Link to="/about">About</Link>
                 </Button>
               </nav>
+
+              {/* === NAVIGASI MOBILE (Hanya tampil di layar kecil) === */}
+              <div className="md:hidden">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Menu className="h-5 w-5" />
+                      <span className="sr-only">Toggle Menu Navigasi</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[250px] sm:w-[300px]">
+                    {/* SheetTitle & Description wajib ada untuk aksesibilitas, bisa disembunyikan pakai sr-only jika tidak ingin terlihat */}
+                    <SheetTitle className="text-left mt-4">Menu</SheetTitle>
+                    <SheetDescription className="sr-only">
+                      Navigasi halaman aplikasi
+                    </SheetDescription>
+
+                    <nav className="flex flex-col gap-2 mt-6">
+                      <Button asChild variant="ghost" className="justify-start">
+                        <Link to="/">Dashboard</Link>
+                      </Button>
+                      <Button asChild variant="ghost" className="justify-start">
+                        <Link to="/transaction">Transaction</Link>
+                      </Button>
+                      <Button asChild variant="ghost" className="justify-start">
+                        <Link to="/about">About</Link>
+                      </Button>
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+              </div>
             </div>
           </header>
 
-          {/* === KONTEN UTAMA (Tempat halaman atau error dirender) === */}
           <main className="flex-1 container mx-auto p-4 flex flex-col">
             {children}
           </main>
 
-          {/* === FOOTER GLOBAL === */}
           <footer className="border-t py-6 text-center text-sm text-muted-foreground bg-muted/50">
             &copy; {new Date().getFullYear()} LearnReact. All rights reserved.
           </footer>
@@ -77,12 +116,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Komponen App: Merender halaman berdasarkan URL (masuk ke dalam {children} di atas)
 export default function App() {
   return <Outlet />;
 }
 
-// Komponen ErrorBoundary: Merender pesan error (masuk ke dalam {children} di atas)
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!";
   let details = "An unexpected error occurred.";
@@ -100,9 +137,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    // 4. Perubahan kecil: Mengganti <main> menjadi <div> agar tidak ada tag <main> ganda di HTML
     <ThemeProvider>
-      <div className="pt-8">
+      <div className="pt-8 container mx-auto px-4">
         <h1 className="text-3xl font-bold mb-2">{message}</h1>
         <p className="text-muted-foreground mb-4">{details}</p>
         {stack && (
