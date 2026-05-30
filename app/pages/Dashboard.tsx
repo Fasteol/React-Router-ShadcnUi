@@ -77,8 +77,11 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">Rp 45.231.000</div>
             <p className="text-xs text-muted-foreground mt-1 text-emerald-500 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              +20.1% dari bulan lalu
+              <TrendingUp className="w-3 h-3 text-emerald-200 dark:text-emerald-400" />
+              <span className="text-emerald-200 dark:text-emerald-400">
+                +20.1%
+              </span>{" "}
+              dari bulan lalu
             </p>
           </CardContent>
         </Card>
@@ -132,7 +135,10 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">94.5%</div>
             <p className="text-xs text-muted-foreground mt-1">
-              +1.2% peningkatan performa
+              <span className="text-emerald-200 dark:text-emerald-400">
+                +1.2%
+              </span>{" "}
+              peningkatan performa{" "}
             </p>
           </CardContent>
         </Card>
