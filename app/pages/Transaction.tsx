@@ -77,8 +77,14 @@ export default function Home() {
   const dataLunas = invoices.filter(
     (item) => item.paymentStatus === "Lunas",
   ).length;
-  const dataBelumLunas = invoices.filter(
-    (item) => item.paymentStatus !== "Lunas",
+  const dataPending = invoices.filter(
+    (item) => item.paymentStatus === "Pending",
+  ).length;
+  const dataBelumBayar = invoices.filter(
+    (item) => item.paymentStatus === "Belum Bayar",
+  ).length;
+  const dataGagal = invoices.filter(
+    (item) => item.paymentStatus === "Gagal",
   ).length;
 
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
@@ -236,7 +242,7 @@ export default function Home() {
         <p className="text-muted-foreground mt-1">Daftar transaksi terbaru.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -268,13 +274,41 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Menunggu Pembayaran
+              Pending
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataBelumLunas}</div>
+            <div className="text-2xl font-bold">{dataPending}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Pending, Belum Bayar ataupun Gagal
+              Pembayaran belum diterima
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-sky-700 dark:text-sky-400">
+              Belum Bayar
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dataBelumBayar}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Belum ada Transaksi
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">
+              Pembayaran Gagal
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dataPending}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Gagal Transaksi
             </p>
           </CardContent>
         </Card>
@@ -289,9 +323,12 @@ export default function Home() {
               setKataKunci(e.target.value);
               setHalamanSaatIni(1);
             }}
-            className="max-w-sm"
+            className="max-w-sm rounded-md"
           />
-          <Button onClick={bukaFormTambah} className="cursor-pointer">
+          <Button
+            onClick={bukaFormTambah}
+            className="cursor-pointer rounded-md"
+          >
             + Tambah Data
           </Button>
         </div>
