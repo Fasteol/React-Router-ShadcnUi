@@ -40,7 +40,7 @@ const chartData = [
 const chartConfig = {
   pendapatan: {
     label: "Pendapatan (Rp)",
-    color: "hsl(var(--primary))", // Menggunakan warna utama (primary) bawaan tema kamu
+    color: "hsl(var(--primary))",
   },
 } satisfies ChartConfig;
 
@@ -49,17 +49,20 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* HEADER DASHBOARD */}
-      <div className="flex items-center justify-between">
+      {/* === HEADER DASHBOARD (SUDAH DIPERBAIKI) === */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Dashboard Overview
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Ringkasan performa finansial dan aktivitas invoice terbaru.
           </p>
         </div>
-        <Button onClick={() => navigate("/transaction")} className="gap-2">
+        <Button
+          onClick={() => navigate("/transaction")}
+          className="w-full sm:w-auto gap-2"
+        >
           Lihat Semua Transaksi
           <ArrowUpRight className="w-4 h-4" />
         </Button>
@@ -146,7 +149,7 @@ export default function DashboardPage() {
 
       {/* KONTEN BAWAH (2 KOLOM: GRAFIK & AKTIVITAS) */}
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-        {/* GRAFIK MENGGUNAKAN SHADCN CHART (Kiri - Lebar 4 Kolom) */}
+        {/* GRAFIK MENGGUNAKAN SHADCN CHART */}
         <Card className="shadow-sm flex flex-col">
           <CardHeader>
             <CardTitle>Overview Pendapatan</CardTitle>
@@ -155,43 +158,35 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-4">
-            {/* Implementasi Komponen ChartContainer */}
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
               <BarChart accessibilityLayer data={chartData}>
-                {/* Garis Horizontal Latar Belakang */}
                 <CartesianGrid
                   vertical={false}
                   strokeDasharray="3 3"
                   className="stroke-muted"
                 />
-
-                {/* Sumbu X (Nama Bulan) */}
                 <XAxis
                   dataKey="bulan"
                   tickLine={false}
                   tickMargin={10}
                   axisLine={false}
-                  tickFormatter={(value) => value.slice(0, 3)} // Menyingkat Januari jadi Jan
+                  tickFormatter={(value) => value.slice(0, 3)}
                 />
-
-                {/* Tooltip Interaktif saat di-hover */}
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent hideLabel={false} />}
                 />
-
-                {/* Balok Grafik (Bar) */}
                 <Bar
                   dataKey="pendapatan"
                   fill="#2563eb"
-                  radius={[4, 4, 0, 0]} // Melengkungkan sudut atas balok
+                  radius={[4, 4, 0, 0]}
                 />
               </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
 
-        {/* Aktivitas Terbaru (Kanan - Lebar 3 Kolom) */}
+        {/* Aktivitas Terbaru */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Aktivitas Terbaru</CardTitle>
