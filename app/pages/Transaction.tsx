@@ -281,7 +281,7 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <Input
             placeholder="Cari nomor invoice..."
             value={kataKunci}
