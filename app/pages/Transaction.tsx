@@ -232,7 +232,7 @@ export default function Home() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Halaman Utama</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Daftar Transaksi</h1>
         <p className="text-muted-foreground mt-1">Daftar transaksi terbaru.</p>
       </div>
 

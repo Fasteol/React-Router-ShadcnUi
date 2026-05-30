@@ -79,7 +79,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   // Struktur data navigasi agar terpusat dan rapi
   const navItems = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    { name: "Transaksi", path: "/transaction", icon: ReceiptText },
+    { name: "Transaction", path: "/transaction", icon: ReceiptText },
     { name: "About", path: "/about", icon: Info },
   ];
 
