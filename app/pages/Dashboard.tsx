@@ -139,9 +139,9 @@ export default function DashboardPage() {
       </div>
 
       {/* KONTEN BAWAH (2 KOLOM: GRAFIK & AKTIVITAS) */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
         {/* GRAFIK MENGGUNAKAN SHADCN CHART (Kiri - Lebar 4 Kolom) */}
-        <Card className="col-span-4 shadow-sm flex flex-col">
+        <Card className="shadow-sm flex flex-col">
           <CardHeader>
             <CardTitle>Overview Pendapatan</CardTitle>
             <CardDescription>
@@ -186,7 +186,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Aktivitas Terbaru (Kanan - Lebar 3 Kolom) */}
-        <Card className="col-span-3 shadow-sm">
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Aktivitas Terbaru</CardTitle>
             <CardDescription>
