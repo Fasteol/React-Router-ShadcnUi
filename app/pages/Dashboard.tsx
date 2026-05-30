@@ -61,7 +61,7 @@ export default function DashboardPage() {
         </div>
         <Button
           onClick={() => navigate("/transaction")}
-          className="w-full sm:w-auto gap-2"
+          className="w-full sm:w-auto gap-2 cursor-pointer"
         >
           Lihat Semua Transaksi
           <ArrowUpRight className="w-4 h-4" />

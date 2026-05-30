@@ -291,7 +291,9 @@ export default function Home() {
             }}
             className="max-w-sm"
           />
-          <Button onClick={bukaFormTambah}>+ Tambah Data</Button>
+          <Button onClick={bukaFormTambah} className="cursor-pointer">
+            + Tambah Data
+          </Button>
         </div>
 
         <div className="border rounded-md">
@@ -350,6 +352,7 @@ export default function Home() {
                           variant="outline"
                           size="sm"
                           onClick={() => bukaFormEdit(invoice)}
+                          className="cursor-pointer"
                         >
                           Edit
                         </Button>
@@ -357,6 +360,7 @@ export default function Home() {
                           variant="destructive"
                           size="sm"
                           onClick={() => konfirmasiHapus(invoice.invoice)}
+                          className="cursor-pointer"
                         >
                           Hapus
                         </Button>

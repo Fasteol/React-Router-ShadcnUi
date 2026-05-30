@@ -152,7 +152,7 @@ export default function AboutPage() {
         <Button
           onClick={() => navigate("/")}
           size="lg"
-          className="gap-2 rounded-full px-8"
+          className="gap-2 rounded-md px-8 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Kembali ke Dashboard Utama
