@@ -1061,7 +1061,7 @@ export default function DashboardPage() {
         <CardContent className="p-0">
           <Tabs defaultValue="terbaru" className="w-full">
             <div className="px-6 pt-4">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsList className="grid w-full max-w-full md:max-w-md grid-cols-2">
                 <TabsTrigger value="terbaru">Aktivitas Terbaru</TabsTrigger>
                 <TabsTrigger value="mendesak" className="relative">
                   Jatuh Tempo
@@ -1140,7 +1140,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
+                      <div className="flex items-center md:gap-4 gap-1 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
                         <div className="font-bold text-sm">
                           {convertAndFormat(item.totalAmount)}
                         </div>
@@ -1150,7 +1150,8 @@ export default function DashboardPage() {
                           className="h-8 text-xs font-semibold rounded-md gap-1.5 flex items-center"
                           onClick={() => handleKirimEmailReminder(item)}
                         >
-                          <Mail className="w-3.5 h-3.5" /> Tindak Lanjuti
+                          <span className="hidden md:flex">Tindak Lanjuti</span>
+                          <ArrowUpRight className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>

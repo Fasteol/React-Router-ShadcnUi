@@ -7,6 +7,8 @@ export default [
   route("service", "pages/Service.tsx"),
   route("about", "pages/About.tsx"),
   route("report", "pages/Report.tsx"),
+  route("expense", "pages/Expense.tsx"),
+  route("user-management", "pages/UserManagement.tsx"),
   route("setting", "pages/Setting.tsx"),
   route("login", "pages/Login.tsx"),
   route("register", "pages/Register.tsx"),

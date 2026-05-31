@@ -4,14 +4,13 @@ import {
   Users,
   UserCheck,
   UserMinus,
-  FileText,
   Search,
   Plus,
   Edit2,
   Trash2,
   AlertCircle,
-  Check,
-  Wallet, // Tambahan icon untuk nilai transaksi
+  CheckCircle2,
+  Wallet,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -25,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { dataAwal } from "~/data/invoices"; // Pastikan path ini sesuai
+import { dataAwal } from "~/data/invoices";
 import {
   Pagination,
   PaginationContent,
@@ -63,9 +62,6 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 
-// ==========================================
-// TIPE DATA KLIEN (Ditambah totalSpent)
-// ==========================================
 export type Client = {
   id: string;
   name: string;
@@ -73,7 +69,7 @@ export type Client = {
   phone: string;
   status: "Aktif" | "Non-aktif";
   totalInvoices: number;
-  totalSpent: number; // Properti baru untuk menyimpan nominal uang
+  totalSpent: number;
 };
 
 // ==========================================
@@ -96,12 +92,11 @@ const formatCurrency = (angka: number, currencyCode: string) => {
 };
 
 // ==========================================
-// LOGIKA EKSTRAKSI AWAL (DARI INVOICE)
+// FUNGSI EKSTRAKSI DATA AWAL KLIEN
 // ==========================================
 const extractInitialClients = (): Client[] => {
   const clientMap = new Map<string, Client>();
   dataAwal.forEach((inv) => {
-    // Ambil nominal dasar dalam rupiah
     const amount = parseCurrencyToNumber(inv.totalAmount);
 
     if (!clientMap.has(inv.clientEmail)) {
@@ -112,23 +107,22 @@ const extractInitialClients = (): Client[] => {
         phone: "-",
         status: "Aktif",
         totalInvoices: 1,
-        totalSpent: amount, // Simpan pengeluaran perdana
+        totalSpent: amount,
       });
     } else {
       const existingClient = clientMap.get(inv.clientEmail)!;
       existingClient.totalInvoices += 1;
-      existingClient.totalSpent += amount; // Akumulasi pengeluaran
+      existingClient.totalSpent += amount;
     }
   });
   return Array.from(clientMap.values());
 };
 
+// ==========================================
+// KOMPONEN UTAMA
+// ==========================================
 export default function ClientsPage() {
   const navigate = useNavigate();
-
-  // ==========================================
-  // STATE MATA UANG (DINAMIS DARI SETTING)
-  // ==========================================
   const [mataUang, setMataUang] = useState("IDR");
 
   useEffect(() => {
@@ -141,24 +135,17 @@ export default function ClientsPage() {
     }
   }, []);
 
-  // Fungsi utilitas praktis untuk merender uang sesuai preferensi
   const convertAndFormat = (rawIdr: number) => {
     const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
     return formatCurrency(finalValue, mataUang);
   };
 
-  // ==========================================
-  // STATE UTAMA
-  // ==========================================
   const [clients, setClients] = useState<Client[]>(extractInitialClients());
   const [kataKunci, setKataKunci] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua");
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
   const [itemPerHalaman, setItemPerHalaman] = useState(10);
 
-  // ==========================================
-  // STATE UNTUK DIALOG & FORM
-  // ==========================================
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
   const [formData, setFormData] = useState<Client>({
@@ -175,31 +162,40 @@ export default function ClientsPage() {
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
   // ==========================================
-  // LOGIKA MENGHITUNG CARD & FILTER DATA
+  // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER & METRIK
   // ==========================================
-  const dataTersaring = clients.filter((item) => {
-    const cocokKataKunci =
-      item.name.toLowerCase().includes(kataKunci.toLowerCase()) ||
-      item.email.toLowerCase().includes(kataKunci.toLowerCase());
+  const { dataTersaring, dataAktif, dataNonAktif, totalNilaiTransaksi } =
+    useMemo(() => {
+      const tersaring = clients.filter((item) => {
+        const cocokKataKunci =
+          item.name.toLowerCase().includes(kataKunci.toLowerCase()) ||
+          item.email.toLowerCase().includes(kataKunci.toLowerCase());
 
-    const cocokStatus =
-      filterStatus === "Semua" || item.status === filterStatus;
+        const cocokStatus =
+          filterStatus === "Semua" || item.status === filterStatus;
 
-    return cocokKataKunci && cocokStatus;
-  });
+        return cocokKataKunci && cocokStatus;
+      });
 
-  const dataAktif = clients.filter((item) => item.status === "Aktif").length;
-  const dataNonAktif = clients.filter(
-    (item) => item.status === "Non-aktif",
-  ).length;
+      let aktif = 0,
+        nonAktif = 0,
+        totalNilai = 0;
 
-  // Total akumulasi uang dari semua klien terdaftar
-  const totalNilaiTransaksi = clients.reduce(
-    (acc, curr) => acc + curr.totalSpent,
-    0,
-  );
+      clients.forEach((item) => {
+        if (item.status === "Aktif") aktif++;
+        else if (item.status === "Non-aktif") nonAktif++;
+        totalNilai += item.totalSpent;
+      });
 
-  // LOGIKA PAGINATION
+      return {
+        dataTersaring: tersaring,
+        dataAktif: aktif,
+        dataNonAktif: nonAktif,
+        totalNilaiTransaksi: totalNilai,
+      };
+    }, [clients, kataKunci, filterStatus]);
+
+  // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
   const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
   const indexAkhir = indexAwal + itemPerHalaman;
@@ -337,9 +333,7 @@ export default function ClientsPage() {
 
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* ==========================================
-          HEADER SECTION
-      ========================================== */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -357,11 +351,8 @@ export default function ClientsPage() {
         </p>
       </div>
 
-      {/* ==========================================
-          OVERVIEW CARDS (METRIK)
-      ========================================== */}
+      {/* OVERVIEW CARDS (METRIK) */}
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Card: Total Klien */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
             <Users className="w-6 h-6" />
@@ -374,7 +365,6 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* Card: Klien Aktif */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
             <UserCheck className="w-6 h-6" />
@@ -385,7 +375,6 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* Card: Klien Non-aktif */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-muted text-muted-foreground rounded-xl shrink-0 w-fit mb-3">
             <UserMinus className="w-6 h-6" />
@@ -398,12 +387,10 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* Card: Total Transaksi Terikat (Diubah menampilkan nominal uang) */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
             <Wallet className="w-6 h-6" />
           </div>
-          {/* Implementasi Format Uang Dinamis di Card */}
           <div
             className="text-xl sm:text-2xl font-bold text-foreground truncate"
             title={convertAndFormat(totalNilaiTransaksi)}
@@ -416,11 +403,8 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* ==========================================
-          MAIN CONTENT AREA (FILTER & TABEL)
-      ========================================== */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex flex-col gap-5">
-        {/* FILTER BAR SECTION */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
           <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <div className="relative md:max-w-xs w-full">
@@ -443,7 +427,7 @@ export default function ClientsPage() {
                 setHalamanSaatIni(1);
               }}
             >
-              <SelectTrigger className="w-full sm:w-[180px] rounded-xl">
+              <SelectTrigger className="w-full sm:w-[180px] rounded-xl h-10">
                 <SelectValue placeholder="Filter Status" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -462,7 +446,6 @@ export default function ClientsPage() {
           </Button>
         </div>
 
-        {/* TABEL DATA */}
         <div className="border rounded-2xl bg-card shadow-sm overflow-hidden overflow-x-auto">
           <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
@@ -476,7 +459,6 @@ export default function ClientsPage() {
                 <TableHead className="font-semibold text-center w-[100px]">
                   Invoice
                 </TableHead>
-                {/* Kolom Baru untuk Menampilkan Nominal */}
                 <TableHead className="font-semibold">Nilai Transaksi</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
                 <TableHead className="text-center w-32 font-semibold">
@@ -519,7 +501,6 @@ export default function ClientsPage() {
                         {client.totalInvoices}
                       </div>
                     </TableCell>
-                    {/* Implementasi Kolom Mata Uang Dinamis */}
                     <TableCell>
                       <div className="font-bold text-foreground">
                         {convertAndFormat(client.totalSpent)}
@@ -565,7 +546,7 @@ export default function ClientsPage() {
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION & LIMIT DATA CONTROLLER */}
+        {/* BOTTOM PAGINATION CONTROLLER */}
         {totalHalaman > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
@@ -632,7 +613,7 @@ export default function ClientsPage() {
       </div>
 
       {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT KLIEN)
+          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
       ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
@@ -663,7 +644,7 @@ export default function ClientsPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="rounded-xl"
+                  className="rounded-xl h-10"
                 />
               </div>
 
@@ -679,7 +660,7 @@ export default function ClientsPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  className="rounded-xl"
+                  className="rounded-xl h-10"
                 />
               </div>
 
@@ -695,7 +676,7 @@ export default function ClientsPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, phone: e.target.value })
                     }
-                    className="rounded-xl"
+                    className="rounded-xl h-10"
                   />
                 </div>
 
@@ -711,7 +692,7 @@ export default function ClientsPage() {
                   >
                     <SelectTrigger
                       id="statusKlien"
-                      className="w-full rounded-xl"
+                      className="w-full rounded-xl h-10"
                     >
                       <SelectValue placeholder="Pilih Status" />
                     </SelectTrigger>
@@ -724,16 +705,19 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            <DialogFooter className="mt-6 border-t pt-4">
+            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl"
+                className="rounded-xl w-full sm:w-auto font-medium"
               >
-                Batalkan
+                Batal
               </Button>
-              <Button onClick={handleSimpan} className="rounded-xl shadow-md">
-                <Check className="w-4 h-4 mr-2" /> Simpan Data
+              <Button
+                onClick={handleSimpan}
+                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Data
               </Button>
             </DialogFooter>
           </div>
@@ -741,7 +725,7 @@ export default function ClientsPage() {
       </Dialog>
 
       {/* ==========================================
-          ALERT DIALOG DELETE KLIEN
+          ALERT DIALOG DELETE
       ========================================== */}
       <AlertDialog
         open={isDeleteDialogOpen}
@@ -761,16 +745,16 @@ export default function ClientsPage() {
               </strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4">
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <AlertDialogCancel
               onClick={() => setIdYangDihapus(null)}
-              className="rounded-xl"
+              className="rounded-xl w-full sm:w-auto mt-0"
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md"
+              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md w-full sm:w-auto font-semibold"
             >
               Ya, Hapus Klien
             </AlertDialogAction>

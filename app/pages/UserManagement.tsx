@@ -1,27 +1,24 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
-import { toast } from "sonner";
+import React, { useState, useMemo } from "react";
 import {
-  Package,
-  TrendingUp,
-  Star,
-  Search,
   Plus,
+  Search,
   Edit2,
   Trash2,
+  Shield,
+  Mail,
+  Users,
+  ShieldCheck,
+  UserCheck,
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "~/lib/utils";
+import { type TeamMember, dataAwalTim } from "~/data/invoices";
 
-// IMPORT DATA DARI INVOICES.TS
-import { dataLayanan, type Service } from "~/data/invoices";
-
-// IMPORT KOMPONEN UI SHADCN
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Textarea } from "~/components/ui/textarea";
 import { Badge } from "~/components/ui/badge";
 import {
   Table,
@@ -31,15 +28,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "~/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -65,48 +53,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
-
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
-
-// ==========================================
-// FUNGSI GENERATOR ID LAYANAN OTOMATIS
-// ==========================================
-const generateServiceID = (dataServices: Service[]) => {
-  const prefix = "S";
-  if (dataServices.length === 0) return `${prefix}001`;
-
-  const urutanTerakhir = dataServices.map((item) => {
-    const bagianAngka = item.id.replace(prefix, "");
-    return parseInt(bagianAngka, 10) || 0;
-  });
-
-  const nextUrutan = Math.max(...urutanTerakhir) + 1;
-  return `${prefix}${String(nextUrutan).padStart(3, "0")}`;
-};
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "~/components/ui/pagination";
 
 // ==========================================
 // KOMPONEN UTAMA
 // ==========================================
-export default function ServicesPage() {
-  const navigate = useNavigate();
-
+export default function UserManagementPage() {
   // STATE UTAMA
-  const [services, setServices] = useState<Service[]>(dataLayanan);
+  const [team, setTeam] = useState<TeamMember[]>(dataAwalTim);
   const [kataKunci, setKataKunci] = useState("");
-  const [mataUang, setMataUang] = useState("IDR");
 
   // STATE PAGINASI
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
@@ -115,52 +78,36 @@ export default function ServicesPage() {
   // STATE DIALOG & FORM
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
-  const [formData, setFormData] = useState<Service>({
+  const [formData, setFormData] = useState<TeamMember>({
     id: "",
     nama: "",
-    deskripsi: "",
-    harga: 0,
+    email: "",
+    role: "Viewer",
+    status: "Mengundang",
   });
 
   // STATE HAPUS DATA
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // MENGAMBIL PREFERENSI MATA UANG
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-    }
-  }, []);
-
-  // FUNGSI KONVERSI DINAMIS
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
-
-  // FILTERING DATA MENGGUNAKAN USEMEMO
-  const dataTersaring = useMemo(() => {
-    return services.filter((item) => {
-      return (
-        item.nama.toLowerCase().includes(kataKunci.toLowerCase()) ||
-        item.deskripsi.toLowerCase().includes(kataKunci.toLowerCase()) ||
-        item.id.toLowerCase().includes(kataKunci.toLowerCase())
+  // ==========================================
+  // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER & METRIK
+  // ==========================================
+  const { dataTersaring, totalAnggota, totalAdmin, totalFinance } =
+    useMemo(() => {
+      const tersaring = team.filter(
+        (user) =>
+          user.nama.toLowerCase().includes(kataKunci.toLowerCase()) ||
+          user.email.toLowerCase().includes(kataKunci.toLowerCase()),
       );
-    });
-  }, [services, kataKunci]);
 
-  // STATISTIK OVERVIEW
-  const totalLayanan = services.length;
-  const rataRataHarga =
-    totalLayanan > 0
-      ? services.reduce((acc, curr) => acc + curr.harga, 0) / totalLayanan
-      : 0;
-  const layananPremium = services.filter((s) => s.harga >= 3000000).length;
+      return {
+        dataTersaring: tersaring,
+        totalAnggota: team.length,
+        totalAdmin: team.filter((t) => t.role === "Admin").length,
+        totalFinance: team.filter((t) => t.role === "Finance").length,
+      };
+    }, [team, kataKunci]);
 
   // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
@@ -174,62 +121,53 @@ export default function ServicesPage() {
   const bukaFormTambah = () => {
     setFormMode("tambah");
     setFormData({
-      id: generateServiceID(services),
+      id: `USR-${String(team.length + 1).padStart(2, "0")}`,
       nama: "",
-      deskripsi: "",
-      harga: 0,
+      email: "",
+      role: "Viewer",
+      status: "Mengundang",
     });
     setIsDialogOpen(true);
   };
 
-  const bukaFormEdit = (dataAsli: Service) => {
+  const bukaFormEdit = (user: TeamMember) => {
     setFormMode("edit");
-    setFormData(dataAsli);
+    setFormData(user);
     setIsDialogOpen(true);
   };
 
   const handleSimpan = () => {
-    if (!formData.nama || !formData.deskripsi || formData.harga <= 0) {
-      toast.error(
-        "Gagal! Pastikan nama, deskripsi, dan harga diisi dengan benar.",
-      );
+    if (!formData.nama || !formData.email) {
+      toast.error("Gagal! Nama lengkap dan email rekan tim wajib diisi.");
       return;
     }
 
     if (formMode === "tambah") {
-      const isExist = services.some((item) => item.id === formData.id);
-      if (isExist) {
-        toast.error(`Gagal! ID Layanan ${formData.id} sudah digunakan.`);
-        return;
-      }
-      setServices([formData, ...services]);
-      toast.success(`Berhasil menambahkan layanan ${formData.nama}!`);
+      setTeam([formData, ...team]);
+      toast.success(`Undangan akses telah dikirimkan ke ${formData.email}`);
     } else {
-      const dataBaru = services.map((item) =>
-        item.id === formData.id ? formData : item,
-      );
-      setServices(dataBaru);
-      toast.success(`Berhasil memperbarui layanan ${formData.nama}!`);
+      setTeam(team.map((t) => (t.id === formData.id ? formData : t)));
+      toast.success("Konfigurasi hak akses tim berhasil diperbarui.");
     }
     setIsDialogOpen(false);
   };
 
-  const konfirmasiHapus = (idLayanan: string) => {
-    setIdYangDihapus(idLayanan);
-    setIsDeleteDialogOpen(true);
+  const konfirmasiHapus = (id: string) => {
+    setIdYangDihapus(id);
+    setIsDeleteOpen(true);
   };
 
   const eksekusiHapus = () => {
     if (idYangDihapus) {
-      const dataBaru = services.filter((item) => item.id !== idYangDihapus);
-      setServices(dataBaru);
+      const dataBaru = team.filter((t) => t.id !== idYangDihapus);
+      setTeam(dataBaru);
 
       if (dataTampil.length === 1 && halamanSaatIni > 1) {
         setHalamanSaatIni(halamanSaatIni - 1);
       }
-      toast.success(`Layanan ${idYangDihapus} berhasil dihapus.`);
+      toast.success("Akses pengguna telah dicabut dari sistem.");
     }
-    setIsDeleteDialogOpen(false);
+    setIsDeleteOpen(false);
     setIdYangDihapus(null);
   };
 
@@ -272,7 +210,6 @@ export default function ServicesPage() {
           </PaginationItem>
         );
       }
-
       return (
         <PaginationItem key={item}>
           <PaginationLink
@@ -303,66 +240,63 @@ export default function ServicesPage() {
           variant="secondary"
           className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm rounded-md"
         >
-          Katalog Layanan & Produk
+          Kontrol Keamanan & Akses
         </Badge>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
-          Daftar Layanan
+          Manajemen Pengguna
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
-          Kelola inventaris dan katalog layanan yang ditawarkan ke klien Anda.
-          Data ini akan terintegrasi langsung saat pembuatan invoice baru.
+          Atur siapa saja yang dapat mengelola sistem invoicing Anda. Berikan
+          batasan akses yang aman sesuai dengan tanggung jawab divisi kerja.
         </p>
       </div>
 
       {/* OVERVIEW CARDS (METRIK) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
-            <Package className="w-6 h-6" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0">
+            <Users className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {totalLayanan}
-          </div>
-          <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Keseluruhan Layanan Aktif
-          </div>
-        </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div
-            className="text-2xl font-bold text-foreground truncate"
-            title={convertAndFormat(rataRataHarga)}
-          >
-            {convertAndFormat(rataRataHarga)}
-          </div>
-          <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Rata-rata Harga Pasar
+          <div>
+            <div className="text-2xl font-bold">{totalAnggota} Anggota</div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+              Terdaftar di Ruang Kerja
+            </div>
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
-            <Star className="w-6 h-6" />
+        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-purple-500/10 text-purple-500 rounded-xl shrink-0">
+            <ShieldCheck className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {layananPremium}
+          <div>
+            <div className="text-2xl font-bold">{totalAdmin} Administrator</div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+              Hak Akses Konfigurasi Penuh
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Layanan Premium (≥ {convertAndFormat(3000000)})
+        </div>
+        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl shrink-0">
+            <UserCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold">
+              {totalFinance} Finansial Staf
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+              Khusus Modul Transaksi & Billing
+            </div>
           </div>
         </div>
       </div>
 
-      {/* FILTER BAR & TABLE */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex flex-col gap-5">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
-          <div className="relative flex-1 md:max-w-md w-full">
+          <div className="relative flex-1 md:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Cari ID, nama, atau deskripsi layanan..."
+              placeholder="Cari nama atau email tim..."
               value={kataKunci}
               onChange={(e) => {
                 setKataKunci(e.target.value);
@@ -371,27 +305,24 @@ export default function ServicesPage() {
               className="pl-9 rounded-xl w-full"
             />
           </div>
-
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
+            className="rounded-xl gap-2 shadow-sm cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Tambah Layanan
+            <Plus className="w-4 h-4" /> Undang Anggota
           </Button>
         </div>
 
-        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden">
-          <Table>
+        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden overflow-x-auto">
+          <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-24 font-semibold">ID</TableHead>
-                <TableHead className="w-1/3 font-semibold">
-                  Nama Layanan
+                <TableHead className="font-semibold">Nama Pengguna</TableHead>
+                <TableHead className="font-semibold">Kontak Email</TableHead>
+                <TableHead className="font-semibold">
+                  Peran Hak Akses (Role)
                 </TableHead>
-                <TableHead className="font-semibold">Deskripsi</TableHead>
-                <TableHead className="text-right font-semibold">
-                  Harga ({mataUang})
-                </TableHead>
+                <TableHead className="font-semibold">Status Sistem</TableHead>
                 <TableHead className="text-center w-32 font-semibold">
                   Aksi
                 </TableHead>
@@ -404,53 +335,59 @@ export default function ServicesPage() {
                     colSpan={5}
                     className="text-center h-32 text-muted-foreground"
                   >
-                    Tidak ada data layanan ditemukan.
+                    Tidak ada data pengguna ditemukan.
                   </TableCell>
                 </TableRow>
               ) : (
-                dataTampil.map((layanan) => (
+                dataTampil.map((user) => (
                   <TableRow
-                    key={layanan.id}
+                    key={user.id}
                     className="hover:bg-muted/40 transition-colors"
                   >
-                    <TableCell className="font-semibold text-muted-foreground">
-                      {layanan.id}
+                    <TableCell className="font-bold text-foreground">
+                      {user.nama}
                     </TableCell>
                     <TableCell>
-                      <div className="font-bold text-foreground">
-                        {layanan.nama}
-                      </div>
+                      <span className="text-sm flex items-center gap-1.5 text-muted-foreground">
+                        <Mail className="w-3.5 h-3.5" /> {user.email}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <p
-                        className="text-muted-foreground text-sm truncate max-w-[250px]"
-                        title={layanan.deskripsi}
+                      <span className="text-sm flex items-center gap-1.5 font-medium">
+                        <Shield className="w-3.5 h-3.5 text-primary" />{" "}
+                        {user.role}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          user.status === "Aktif"
+                            ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400 border-0 font-semibold shadow-none"
+                            : user.status === "Mengundang"
+                              ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400 border-0 font-semibold shadow-none"
+                              : "bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400 border-0 font-semibold shadow-none"
+                        }
                       >
-                        {layanan.deskripsi}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit ml-auto">
-                        {convertAndFormat(layanan.harga)}
-                      </div>
+                        {user.status}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => bukaFormEdit(layanan)}
+                          onClick={() => bukaFormEdit(user)}
                           className="h-8 w-8 text-blue-600 rounded-lg hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
-                          title="Edit"
+                          title="Edit Akses"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => konfirmasiHapus(layanan.id)}
+                          onClick={() => konfirmasiHapus(user.id)}
                           className="h-8 w-8 text-red-600 rounded-lg hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                          title="Hapus"
+                          title="Cabut Akses"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -530,45 +467,33 @@ export default function ServicesPage() {
       </div>
 
       {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
+          FORM DIALOG (TAMBAH / EDIT)
       ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        {/* Lebar Dialog dibuat konsisten 480px seperti file lainnya */}
         <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
           <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
           <div className="p-6">
             <DialogHeader className="mb-4">
               <DialogTitle className="text-xl font-bold">
                 {formMode === "tambah"
-                  ? "Tambah Layanan Baru"
-                  : "Ubah Data Layanan"}
+                  ? "Undang Rekan Kerja"
+                  : "Ubah Konfigurasi Akses"}
               </DialogTitle>
               <DialogDescription className="text-sm">
-                {formMode === "tambah"
-                  ? "Masukkan detail informasi untuk layanan atau produk baru."
-                  : "Sesuaikan kembali informasi detail layanan yang sudah ada."}
+                Sistem akan menyelaraskan izin menu aplikasi berdasarkan peran
+                yang Anda pilih di bawah ini.
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-5 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="id" className="font-semibold">
-                  ID Layanan
-                </Label>
-                <Input
-                  id="id"
-                  value={formData.id}
-                  disabled
-                  className="rounded-xl h-10 bg-muted/50 font-bold"
-                />
-              </div>
-
-              <div className="grid gap-2">
                 <Label htmlFor="nama" className="font-semibold">
-                  Nama Layanan / Produk
+                  Nama Lengkap
                 </Label>
                 <Input
                   id="nama"
-                  placeholder="Contoh: Jasa Desain UI/UX"
+                  placeholder="Contoh: Muhammad Rafli"
                   value={formData.nama}
                   onChange={(e) =>
                     setFormData({ ...formData, nama: e.target.value })
@@ -578,48 +503,70 @@ export default function ServicesPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="deskripsi" className="font-semibold">
-                  Deskripsi Lengkap
+                <Label htmlFor="email" className="font-semibold">
+                  Alamat Email Kerja
                 </Label>
-                <Textarea
-                  id="deskripsi"
-                  placeholder="Jelaskan spesifikasi detail mengenai layanan..."
-                  value={formData.deskripsi}
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={formData.email}
                   onChange={(e) =>
-                    setFormData({ ...formData, deskripsi: e.target.value })
+                    setFormData({ ...formData, email: e.target.value })
                   }
-                  className="rounded-xl min-h-[100px] resize-none"
+                  className="rounded-xl h-10"
+                  disabled={formMode === "edit"}
                 />
               </div>
 
+              {/* DIBUAT STACKING (VERTIKAL) AGAR LEGA DAN TIDAK TERPOTONG */}
               <div className="grid gap-2">
-                <Label htmlFor="harga" className="font-semibold">
-                  Harga Patokan (Mata Uang Dasar: IDR)
+                <Label htmlFor="role" className="font-semibold">
+                  Peran & Hak Akses
                 </Label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70 pointer-events-none select-none">
-                    Rp
-                  </div>
-                  <Input
-                    id="harga"
-                    type="number"
-                    placeholder="0"
-                    value={formData.harga || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        harga: Number(e.target.value),
-                      })
-                    }
-                    className="rounded-xl pl-10 pr-4 h-10 font-bold font-mono text-base"
-                  />
-                </div>
+                <Select
+                  value={formData.role}
+                  onValueChange={(val: "Admin" | "Finance" | "Viewer") =>
+                    setFormData({ ...formData, role: val })
+                  }
+                >
+                  <SelectTrigger id="role" className="w-full rounded-xl h-10">
+                    <SelectValue placeholder="Pilih Peran" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="Finance">Finance</SelectItem>
+                    <SelectItem value="Viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-[11px] text-muted-foreground/80 pl-1 leading-relaxed mt-0.5">
-                  * Masukkan angka murni tanpa pemisah. Nilai akan otomatis
-                  terkonversi menjadi{" "}
-                  <span className="font-bold text-foreground">{mataUang}</span>{" "}
-                  di tabel berdasarkan pengaturan Anda.
+                  * Menentukan batasan izin akses modul dan manipulasi data.
                 </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="status" className="font-semibold">
+                  Status Akun
+                </Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(
+                    val: "Aktif" | "Mengundang" | "Ditangguhkan",
+                  ) => setFormData({ ...formData, status: val })}
+                  disabled={formMode === "tambah"}
+                >
+                  <SelectTrigger
+                    id="status"
+                    className="w-full rounded-xl h-10 disabled:bg-muted/50 disabled:opacity-80"
+                  >
+                    <SelectValue placeholder="Pilih Status" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="Aktif">Aktif</SelectItem>
+                    <SelectItem value="Mengundang">Mengundang</SelectItem>
+                    <SelectItem value="Ditangguhkan">Ditangguhkan</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -629,13 +576,14 @@ export default function ServicesPage() {
                 onClick={() => setIsDialogOpen(false)}
                 className="rounded-xl w-full sm:w-auto font-medium"
               >
-                Batal
+                Batalkan
               </Button>
               <Button
                 onClick={handleSimpan}
                 className="rounded-xl shadow-md w-full sm:w-auto font-bold"
               >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Katalog
+                <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                {formMode === "tambah" ? "Kirim Undangan" : "Simpan Perubahan"}
               </Button>
             </DialogFooter>
           </div>
@@ -645,19 +593,16 @@ export default function ServicesPage() {
       {/* ==========================================
           ALERT DIALOG DELETE
       ========================================== */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent className="sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="w-5 h-5" /> Hapus Data Layanan?
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-500">
+              <AlertCircle className="w-5 h-5" /> Putus Akses Anggota Tim?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm mt-2">
-              Tindakan ini permanen. Layanan dengan ID{" "}
-              <strong className="text-foreground">{idYangDihapus}</strong> akan
-              dihapus dari daftar katalog produk.
+              Tindakan ini akan mencabut seluruh hak akses dari pengguna ini.
+              Sesi masuk mereka akan langsung kedaluwarsa seketika dan mereka
+              tidak dapat lagi mengakses ruang kerja ini.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
@@ -665,13 +610,13 @@ export default function ServicesPage() {
               onClick={() => setIdYangDihapus(null)}
               className="rounded-xl w-full sm:w-auto mt-0"
             >
-              Batal
+              Kembali
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl w-full sm:w-auto shadow-md"
+              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md w-full sm:w-auto font-semibold"
             >
-              Ya, Hapus
+              Ya, Putus Akses
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -11,6 +11,29 @@ export type Invoice = {
   services: Service[];
 };
 
+// ==========================================
+// TIPE & DATA: MANAJEMEN TIM (TEAM MEMBER)
+// ==========================================
+export type TeamMember = {
+  id: string;
+  nama: string;
+  email: string;
+  role: "Admin" | "Finance" | "Viewer";
+  status: "Aktif" | "Mengundang" | "Ditangguhkan";
+};
+
+// ==========================================
+// TIPE & DATA: PENGELUARAN (EXPENSE)
+// ==========================================
+export type Expense = {
+  id: string;
+  deskripsi: string;
+  kategori: string;
+  jumlah: number;
+  tanggal: string;
+  status: "Dibayar" | "Pending";
+};
+
 export type AdminSettings = {
   profil: {
     nama: string;
@@ -68,6 +91,72 @@ export const defaultAdminSettings: AdminSettings = {
     notifikasiEmail: true,
   },
 };
+
+export const dataAwalTim: TeamMember[] = [
+  {
+    id: "USR-01",
+    nama: "Razan Muhammad Fauzan Sya'bani",
+    email: "razan@fauzansyabani.dev",
+    role: "Admin",
+    status: "Aktif",
+  },
+  {
+    id: "USR-02",
+    nama: "Riana Putri",
+    email: "riana.p@billify.com",
+    role: "Finance",
+    status: "Aktif",
+  },
+  {
+    id: "USR-03",
+    nama: "Budi Pratama",
+    email: "budi@sales.com",
+    role: "Viewer",
+    status: "Mengundang",
+  },
+  {
+    id: "USR-04",
+    nama: "Jessica Wong",
+    email: "jess@ex-partner.com",
+    role: "Finance",
+    status: "Ditangguhkan",
+  },
+];
+
+export const dataAwalExpense: Expense[] = [
+  {
+    id: "EXP-001",
+    deskripsi: "Sewa Server AWS",
+    kategori: "Operasional",
+    jumlah: 2400000,
+    tanggal: "2026-05-10",
+    status: "Dibayar",
+  },
+  {
+    id: "EXP-002",
+    deskripsi: "Langganan Figma Pro",
+    kategori: "Tools/Software",
+    jumlah: 450000,
+    tanggal: "2026-05-12",
+    status: "Dibayar",
+  },
+  {
+    id: "EXP-003",
+    deskripsi: "Iklan Facebook & IG Ads",
+    kategori: "Pemasaran",
+    jumlah: 5000000,
+    tanggal: "2026-05-15",
+    status: "Pending",
+  },
+  {
+    id: "EXP-004",
+    deskripsi: "Gaji Staf Freelance",
+    kategori: "Gaji/Upah",
+    jumlah: 7500000,
+    tanggal: "2026-05-25",
+    status: "Dibayar",
+  },
+];
 
 const pilihanStatus = ["Lunas", "Pending", "Belum Bayar", "Gagal"];
 const pilihanMetode = [

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   Check,
@@ -94,15 +94,13 @@ import {
 // ==========================================
 const EXCHANGE_RATE_USD = 16000;
 
-const parseCurrencyToNumber = (currencyString: string) => {
+const parseCurrencyToNumber = (currencyString: string | number) => {
   if (!currencyString) return 0;
   const str = String(currencyString);
-  // Cek apakah string mengandung format USD
   if (str.includes("$") || str.includes("USD")) {
-    const numericPart = str.replace(/[^0-9.]/g, ""); // Pertahankan titik untuk desimal
+    const numericPart = str.replace(/[^0-9.]/g, "");
     return Math.round(parseFloat(numericPart) * EXCHANGE_RATE_USD) || 0;
   }
-  // Parsing default untuk IDR
   return parseInt(str.replace(/[^0-9]/g, ""), 10) || 0;
 };
 
@@ -150,9 +148,6 @@ const generateInvoiceID = (dataInvoices: Invoice[]) => {
 export default function TransactionPage() {
   const navigate = useNavigate();
 
-  // ==========================================
-  // STATE MATA UANG (DINAMIS DARI SETTING)
-  // ==========================================
   const [mataUang, setMataUang] = useState("IDR");
 
   useEffect(() => {
@@ -176,16 +171,11 @@ export default function TransactionPage() {
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
   const [itemPerHalaman, setItemPerHalaman] = useState(10);
 
-  // STATE UNTUK DIALOG & FORM
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [openComboboxKlien, setOpenComboboxKlien] = useState(false);
   const [openComboboxLayanan, setOpenComboboxLayanan] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
-
-  // State Accordion Tabel (Baris mana yang sedang terbuka)
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-
-  // State untuk melacak layanan apa saja yang dipilih pada form saat ini
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
 
   const [formData, setFormData] = useState<Invoice>({
@@ -195,7 +185,7 @@ export default function TransactionPage() {
     clientEmail: "",
     paymentStatus: "",
     paymentMethod: "",
-    totalAmount: "",
+    totalAmount: "0",
     date: "",
     dueDate: "",
     services: [],
@@ -204,43 +194,54 @@ export default function TransactionPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // LOGIKA FILTER & CARD DATA
-  const dataTersaring = invoices.filter((item) => {
-    const cocokKataKunci =
-      item.invoice.toLowerCase().includes(kataKunci.toLowerCase()) ||
-      item.clientName.toLowerCase().includes(kataKunci.toLowerCase());
+  // ==========================================
+  // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER
+  // ==========================================
+  const dataTersaring = useMemo(() => {
+    return invoices.filter((item) => {
+      const cocokKataKunci =
+        item.invoice.toLowerCase().includes(kataKunci.toLowerCase()) ||
+        item.clientName.toLowerCase().includes(kataKunci.toLowerCase());
 
-    const cocokStatus =
-      filterStatus === "Semua" || item.paymentStatus === filterStatus;
+      const cocokStatus =
+        filterStatus === "Semua" || item.paymentStatus === filterStatus;
 
-    return cocokKataKunci && cocokStatus;
-  });
+      return cocokKataKunci && cocokStatus;
+    });
+  }, [invoices, kataKunci, filterStatus]);
 
-  const dataLunas = invoices.filter(
-    (item) => item.paymentStatus === "Lunas",
-  ).length;
-  const dataPending = invoices.filter(
-    (item) => item.paymentStatus === "Pending",
-  ).length;
-  const dataBelumBayar = invoices.filter(
-    (item) => item.paymentStatus === "Belum Bayar",
-  ).length;
-  const dataGagal = invoices.filter(
-    (item) => item.paymentStatus === "Gagal",
-  ).length;
+  const { dataLunas, dataPending, dataBelumBayar, dataGagal } = useMemo(() => {
+    let lunas = 0,
+      pending = 0,
+      belumBayar = 0,
+      gagal = 0;
+    invoices.forEach((item) => {
+      if (item.paymentStatus === "Lunas") lunas++;
+      else if (item.paymentStatus === "Pending") pending++;
+      else if (item.paymentStatus === "Belum Bayar") belumBayar++;
+      else if (item.paymentStatus === "Gagal") gagal++;
+    });
+    return {
+      dataLunas: lunas,
+      dataPending: pending,
+      dataBelumBayar: belumBayar,
+      dataGagal: gagal,
+    };
+  }, [invoices]);
 
+  // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
   const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
   const indexAkhir = indexAwal + itemPerHalaman;
   const dataTampil = dataTersaring.slice(indexAwal, indexAkhir);
 
-  // ==========================================
-  // FUNGSI AKSI (TAMBAH, EDIT, HAPUS, ACCORDION)
-  // ==========================================
   const toggleRow = (invoiceId: string) => {
     setExpandedRow((prev) => (prev === invoiceId ? null : invoiceId));
   };
 
+  // ==========================================
+  // FUNGSI AKSI (TAMBAH, EDIT, HAPUS)
+  // ==========================================
   const bukaFormTambah = () => {
     const tglDibuat = new Date().toISOString().split("T")[0];
     const dateObj = new Date(tglDibuat);
@@ -250,7 +251,7 @@ export default function TransactionPage() {
     const idOtomatis = generateInvoiceID(invoices);
 
     setFormMode("tambah");
-    setSelectedServices([]); // Reset layanan terpilih
+    setSelectedServices([]);
     setFormData({
       id: `id-${Date.now()}`,
       invoice: idOtomatis,
@@ -258,7 +259,7 @@ export default function TransactionPage() {
       clientEmail: "",
       paymentStatus: "Pending",
       paymentMethod: "Transfer Bank",
-      totalAmount: mataUang === "USD" ? "$ 0.00" : "Rp 0",
+      totalAmount: "0",
       date: tglDibuat,
       dueDate: tglJatuhTempo,
       services: [],
@@ -274,20 +275,25 @@ export default function TransactionPage() {
   };
 
   const handleSimpan = () => {
+    const nominalAkhir = parseCurrencyToNumber(formData.totalAmount);
+
     if (
       !formData.invoice ||
       !formData.clientName ||
       !formData.paymentStatus ||
-      !formData.totalAmount ||
-      formData.totalAmount === "Rp " ||
-      formData.totalAmount === "$ 0.00"
+      nominalAkhir <= 0
     ) {
-      toast.error("Gagal! Kolom utama wajib diisi dengan benar.");
+      toast.error(
+        "Gagal! Pastikan data klien, status, dan nominal diisi dengan benar.",
+      );
       return;
     }
 
-    // Sisipkan layanan terpilih ke dalam formData
-    const finalData = { ...formData, services: selectedServices };
+    const finalData = {
+      ...formData,
+      services: selectedServices,
+      totalAmount: nominalAkhir.toString(),
+    };
 
     if (formMode === "tambah") {
       const isExist = invoices.some(
@@ -331,22 +337,12 @@ export default function TransactionPage() {
     setIdYangDihapus(null);
   };
 
-  // ==========================================
-  // HANDLER LAYANAN & NOMINAL
-  // ==========================================
   const hitungTotalLayanan = (layananSaatIni: Service[]) => {
     const total = layananSaatIni.reduce((acc, curr) => acc + curr.harga, 0);
-    if (total === 0) {
-      setFormData({
-        ...formData,
-        totalAmount: mataUang === "USD" ? "$ 0.00" : "Rp 0",
-      });
-    } else {
-      setFormData({
-        ...formData,
-        totalAmount: convertAndFormat(total),
-      });
-    }
+    setFormData({
+      ...formData,
+      totalAmount: total.toString(),
+    });
   };
 
   const tambahLayanan = (layanan: Service) => {
@@ -361,23 +357,6 @@ export default function TransactionPage() {
     );
     setSelectedServices(daftarBaru);
     hitungTotalLayanan(daftarBaru);
-  };
-
-  const handleUbahNominal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-
-    if (mataUang === "USD") {
-      // Izinkan teks bebas jika USD (agar pengguna bisa mengetik desimal dengan mudah)
-      setFormData({ ...formData, totalAmount: val });
-    } else {
-      const angkaSaja = val.replace(/[^0-9]/g, "");
-      if (angkaSaja === "") {
-        setFormData({ ...formData, totalAmount: "Rp 0" });
-      } else {
-        const formatRupiah = parseInt(angkaSaja, 10).toLocaleString("id-ID");
-        setFormData({ ...formData, totalAmount: `Rp ${formatRupiah}` });
-      }
-    }
   };
 
   const renderPaginationItems = () => {
@@ -419,7 +398,6 @@ export default function TransactionPage() {
           </PaginationItem>
         );
       }
-
       return (
         <PaginationItem key={item}>
           <PaginationLink
@@ -444,9 +422,7 @@ export default function TransactionPage() {
 
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* ==========================================
-          HEADER SECTION
-      ========================================== */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -463,11 +439,8 @@ export default function TransactionPage() {
         </p>
       </div>
 
-      {/* ==========================================
-          OVERVIEW CARDS (METRIK)
-      ========================================== */}
+      {/* OVERVIEW CARDS (METRIK) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* Card: Total */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1 col-span-2 md:col-span-1">
           <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
             <Receipt className="w-6 h-6" />
@@ -479,8 +452,6 @@ export default function TransactionPage() {
             Total Transaksi
           </div>
         </div>
-
-        {/* Card: Lunas */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
             <CheckCircle2 className="w-6 h-6" />
@@ -490,8 +461,6 @@ export default function TransactionPage() {
             Berhasil Lunas
           </div>
         </div>
-
-        {/* Card: Pending */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
             <Clock className="w-6 h-6" />
@@ -503,8 +472,6 @@ export default function TransactionPage() {
             Pending
           </div>
         </div>
-
-        {/* Card: Belum Bayar */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
             <AlertCircle className="w-6 h-6" />
@@ -516,8 +483,6 @@ export default function TransactionPage() {
             Belum Bayar
           </div>
         </div>
-
-        {/* Card: Gagal */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-red-500/10 text-red-500 rounded-xl shrink-0 w-fit mb-3">
             <XCircle className="w-6 h-6" />
@@ -529,11 +494,8 @@ export default function TransactionPage() {
         </div>
       </div>
 
-      {/* ==========================================
-          MAIN CONTENT AREA (FILTER & TABEL)
-      ========================================== */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex flex-col gap-5">
-        {/* FILTER BAR SECTION */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
           <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <div className="relative md:max-w-xs w-full">
@@ -548,7 +510,6 @@ export default function TransactionPage() {
                 className="pl-9 rounded-xl w-full"
               />
             </div>
-
             <Select
               value={filterStatus}
               onValueChange={(val) => {
@@ -568,7 +529,6 @@ export default function TransactionPage() {
               </SelectContent>
             </Select>
           </div>
-
           <Button
             onClick={bukaFormTambah}
             className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
@@ -577,9 +537,8 @@ export default function TransactionPage() {
           </Button>
         </div>
 
-        {/* TABEL DATA */}
-        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden">
-          <Table>
+        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden overflow-x-auto">
+          <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
                 <TableHead className="w-56 font-semibold">
@@ -609,7 +568,6 @@ export default function TransactionPage() {
               ) : (
                 dataTampil.map((invoice) => (
                   <React.Fragment key={invoice.invoice}>
-                    {/* BARIS UTAMA (CLICKABLE) */}
                     <TableRow
                       className="cursor-pointer hover:bg-muted/40 transition-colors group"
                       onClick={() => toggleRow(invoice.invoice)}
@@ -696,7 +654,6 @@ export default function TransactionPage() {
                       </TableCell>
                     </TableRow>
 
-                    {/* BARIS ACCORDION (DETAIL LAYANAN) */}
                     {expandedRow === invoice.invoice && (
                       <TableRow className="bg-muted/10 hover:bg-muted/10">
                         <TableCell colSpan={6} className="p-0 border-b">
@@ -745,7 +702,6 @@ export default function TransactionPage() {
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION & LIMIT DATA CONTROLLER */}
         {totalHalaman > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
@@ -812,10 +768,11 @@ export default function TransactionPage() {
       </div>
 
       {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT)
+          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
       ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[500px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
           <div className="p-6">
             <DialogHeader className="mb-4">
               <DialogTitle className="text-xl font-bold">
@@ -831,7 +788,6 @@ export default function TransactionPage() {
             </DialogHeader>
 
             <div className="grid gap-5 py-2 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
-              {/* KODE INVOICE */}
               <div className="grid gap-2">
                 <Label htmlFor="invoice" className="font-semibold">
                   Nomor Invoice
@@ -843,12 +799,11 @@ export default function TransactionPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, invoice: e.target.value })
                   }
-                  className="rounded-xl uppercase bg-muted/50 font-medium"
+                  className="rounded-xl uppercase bg-muted/50 font-medium h-10"
                   disabled={formMode === "edit"}
                 />
               </div>
 
-              {/* KLIEN (COMBOBOX) */}
               <div className="grid gap-2">
                 <Label className="font-semibold">Klien Tujuan</Label>
                 <Popover
@@ -860,7 +815,7 @@ export default function TransactionPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={openComboboxKlien}
-                      className="w-full justify-between font-normal rounded-xl"
+                      className="w-full justify-between font-normal rounded-xl h-10"
                     >
                       {formData.clientName
                         ? formData.clientName
@@ -869,7 +824,7 @@ export default function TransactionPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-[450px] p-0 rounded-xl"
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl"
                     align="start"
                   >
                     <Command>
@@ -890,7 +845,6 @@ export default function TransactionPage() {
                                 const dataTerpilih = daftarKlien.find(
                                   (k) => k.name.toLowerCase() === currentValue,
                                 );
-
                                 setFormData({
                                   ...formData,
                                   clientName: dataTerpilih
@@ -900,7 +854,6 @@ export default function TransactionPage() {
                                     ? dataTerpilih.email
                                     : "",
                                 });
-
                                 setOpenComboboxKlien(false);
                               }}
                               className="cursor-pointer"
@@ -928,7 +881,6 @@ export default function TransactionPage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
-                {/* EMAIL KLIEN (READ ONLY TEXT) */}
                 {formData.clientEmail && (
                   <p className="text-xs text-muted-foreground mt-0.5 ml-1">
                     Email: {formData.clientEmail}
@@ -936,7 +888,6 @@ export default function TransactionPage() {
                 )}
               </div>
 
-              {/* LAYANAN (COMBOBOX & LIST) */}
               <div className="grid gap-2 p-4 rounded-xl border bg-muted/10 border-dashed">
                 <Label className="font-semibold text-primary flex items-center gap-2">
                   <Receipt className="w-4 h-4" /> Daftar Layanan Tertagih
@@ -950,7 +901,7 @@ export default function TransactionPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={openComboboxLayanan}
-                      className="w-full justify-between font-normal text-muted-foreground rounded-xl mt-2 bg-background hover:bg-background/80"
+                      className="w-full justify-between font-normal text-muted-foreground rounded-xl mt-2 h-10 bg-background hover:bg-background/80"
                     >
                       <span className="flex items-center gap-2">
                         <Plus className="w-4 h-4" /> Sisipkan layanan dari
@@ -960,7 +911,7 @@ export default function TransactionPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-[415px] p-0 rounded-xl"
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl"
                     align="start"
                   >
                     <Command>
@@ -996,7 +947,6 @@ export default function TransactionPage() {
                   </PopoverContent>
                 </Popover>
 
-                {/* DAFTAR LAYANAN TERPILIH */}
                 {selectedServices.length > 0 && (
                   <div className="flex flex-col gap-2 mt-3">
                     {selectedServices.map((layanan, idx) => (
@@ -1026,7 +976,6 @@ export default function TransactionPage() {
                 )}
               </div>
 
-              {/* ROW: STATUS & METODE */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="status" className="font-semibold">
@@ -1038,7 +987,10 @@ export default function TransactionPage() {
                       setFormData({ ...formData, paymentStatus: val })
                     }
                   >
-                    <SelectTrigger id="status" className="w-full rounded-xl">
+                    <SelectTrigger
+                      id="status"
+                      className="w-full rounded-xl h-10"
+                    >
                       <SelectValue placeholder="Pilih Status" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
@@ -1060,7 +1012,10 @@ export default function TransactionPage() {
                       setFormData({ ...formData, paymentMethod: val })
                     }
                   >
-                    <SelectTrigger id="metode" className="w-full rounded-xl">
+                    <SelectTrigger
+                      id="metode"
+                      className="w-full rounded-xl h-10"
+                    >
                       <SelectValue placeholder="Pilih Metode" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
@@ -1078,37 +1033,48 @@ export default function TransactionPage() {
                 </div>
               </div>
 
-              {/* NOMINAL TOTAL */}
               <div className="grid gap-2 pt-2">
                 <Label htmlFor="nominal" className="font-semibold">
                   Nominal Penagihan Akhir
                 </Label>
-                <div className="relative">
+                <div className="relative flex items-center">
+                  <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70 pointer-events-none select-none">
+                    {mataUang === "USD" ? "$" : "Rp"}
+                  </div>
                   <Input
                     id="nominal"
-                    placeholder={mataUang === "USD" ? "$ 0.00" : "Rp 0"}
-                    value={formData.totalAmount}
-                    onChange={handleUbahNominal}
-                    className="w-full font-bold rounded-xl text-lg h-12 bg-primary/5 border-primary/20 text-primary focus-visible:ring-primary/30"
+                    type="number"
+                    placeholder="0"
+                    value={parseCurrencyToNumber(formData.totalAmount) || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        totalAmount: e.target.value,
+                      })
+                    }
+                    className="rounded-xl pl-10 pr-4 h-10 font-bold font-mono text-base"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <AlertCircle className="w-3 h-3" /> Nominal terkalkulasi dari
-                  layanan terpilih. Anda dapat menyesuaikannya secara manual.
+                <p className="text-[11px] text-muted-foreground/80 pl-1 leading-relaxed mt-0.5">
+                  * Nominal terkalkulasi dari layanan terpilih, atau sesuaikan
+                  secara manual tanpa pemisah ribuan.
                 </p>
               </div>
             </div>
 
-            <DialogFooter className="mt-6 border-t pt-4">
+            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl"
+                className="rounded-xl w-full sm:w-auto font-medium"
               >
                 Batalkan
               </Button>
-              <Button onClick={handleSimpan} className="rounded-xl shadow-md">
-                <Check className="w-4 h-4 mr-2" /> Simpan Data
+              <Button
+                onClick={handleSimpan}
+                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Transaksi
               </Button>
             </DialogFooter>
           </div>
@@ -1116,7 +1082,7 @@ export default function TransactionPage() {
       </Dialog>
 
       {/* ==========================================
-          ALERT DIALOG (HAPUS DATA)
+          ALERT DIALOG DELETE
       ========================================== */}
       <AlertDialog
         open={isDeleteDialogOpen}
@@ -1135,11 +1101,16 @@ export default function TransactionPage() {
               selamanya.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4">
-            <AlertDialogCancel className="rounded-xl">Batal</AlertDialogCancel>
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <AlertDialogCancel
+              onClick={() => setIdYangDihapus(null)}
+              className="rounded-xl w-full sm:w-auto mt-0"
+            >
+              Batal
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md"
+              className="bg-red-600 text-white hover:bg-red-700 rounded-xl w-full sm:w-auto shadow-md"
             >
               Ya, Hapus Permanen
             </AlertDialogAction>

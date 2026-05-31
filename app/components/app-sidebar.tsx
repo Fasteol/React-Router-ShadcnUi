@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useEffect, useState } from "react";
-// GANTI import dari next/navigation menjadi react-router
 import { useNavigate } from "react-router";
 
 import {
@@ -11,9 +10,10 @@ import {
   User as UserIcon,
   Package,
   BarChart3,
+  Wallet, // <--- Tambah ini untuk Expense
+  Users,
   Info,
   Settings,
-  GalleryVerticalEnd,
   AudioWaveform,
 } from "lucide-react";
 
@@ -30,17 +30,58 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
+// =========================================================================
+// LOGO KUSTOM: BILLIFY (SISTEM INVOICE & MANAJEMEN)
+// =========================================================================
+// Desain menggabungkan kertas invoice, garis transaksi, dan aksen lingkaran
+// sukses finansial yang modern dan minimalis.
+const BillifyLogo = ({ className, ...props }: React.ComponentProps<"svg">) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    {/* Efek layer dokumen di belakang (menandakan pengarsipan/manajemen) */}
+    <path d="M5 9V4a2 2 0 0 1 2-2h9l4 4v4" className="opacity-30" />
+    {/* Dokumen Utama (Invoice) */}
+    <path d="M7 6h9l4 4v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6z" />
+    {/* Lipatan kertas invoice */}
+    <path d="M16 6v4h4" />
+    {/* Garis rincian tagihan */}
+    <path d="M9 12h6" />
+    <path d="M9 16h4" />
+    {/* Dot indikator status/sukses finansial */}
+    <circle
+      cx="16"
+      cy="16"
+      r="1.5"
+      fill="currentColor"
+      className="text-primary"
+    />
+  </svg>
+);
+
+// =========================================================================
+// DATA NAVIGASI
+// =========================================================================
 const navData = {
   teams: [
-    { name: "Billify", logo: GalleryVerticalEnd, plan: "" },
+    { name: "Billify", logo: BillifyLogo, plan: "" },
     { name: "Personal Proj", logo: AudioWaveform, plan: "Free" },
   ],
   navMain: [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
     { title: "Transaction", url: "/transaction", icon: ReceiptText },
+    { title: "Expense", url: "/expense", icon: Wallet }, // <--- Halaman Baru Expense
     { title: "Client", url: "/client", icon: UserIcon },
     { title: "Services", url: "/service", icon: Package },
     { title: "Reports", url: "/report", icon: BarChart3 },
+    { title: "User Management", url: "/user-management", icon: Users }, // <--- Halaman Baru User Management
   ],
   projects: [
     { name: "About", url: "/about", icon: Info },
@@ -48,8 +89,10 @@ const navData = {
   ],
 };
 
+// =========================================================================
+// KOMPONEN UTAMA SIDEBAR
+// =========================================================================
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  // GUNAKAN useNavigate dari React Router
   const navigate = useNavigate();
 
   const [currentUser, setCurrentUser] = useState({
@@ -82,14 +125,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return () => window.removeEventListener("user-updated", loadUser);
   }, []);
 
-  // ==========================================
-  // FUNGSI LOGOUT UNTUK REACT ROUTER
-  // ==========================================
   const handleLogout = () => {
-    // 1. Hapus sesi
     localStorage.removeItem("currentUser");
-
-    // 2. Arahkan ke rute /login menggunakan fungsi navigate React Router
     navigate("/login");
   };
 
@@ -110,7 +147,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             name: currentUser.name,
             email: currentUser.email,
             avatar: currentUser.avatar,
-            onLogout: handleLogout, // Fungsi ini sekarang aman dijalankan
+            onLogout: handleLogout,
           }}
         />
       </SidebarFooter>
