@@ -1,5 +1,18 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import {
+  Users,
+  UserCheck,
+  UserMinus,
+  FileText,
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  AlertCircle,
+  Check,
+} from "lucide-react";
+import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -21,7 +34,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "~/components/ui/pagination";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -259,6 +271,11 @@ export default function ClientsPage() {
               e.preventDefault();
               setHalamanSaatIni(item as number);
             }}
+            className={
+              halamanSaatIni === item
+                ? "rounded-xl"
+                : "rounded-xl hover:bg-muted"
+            }
           >
             {item}
           </PaginationLink>
@@ -268,84 +285,101 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Daftar Klien</h1>
-        <p className="text-muted-foreground mt-1">
-          Kelola data pelanggan dan perusahaan.
+    <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* ==========================================
+          HEADER SECTION
+      ========================================== */}
+      <div className="flex flex-col items-start space-y-3 mt-2">
+        <Badge
+          variant="secondary"
+          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm rounded-md"
+        >
+          Modul Manajemen Klien
+        </Badge>
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+          Daftar Klien
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
+          Kelola database pelanggan dan perusahaan Anda. Pantau status keaktifan
+          dan jumlah transaksi yang terikat dengan setiap klien secara
+          real-time.
         </p>
       </div>
 
-      {/* Tampilan Grid Atas (Menyesuaikan dengan konteks Klien) */}
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Klien</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{clients.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Semua klien terdaftar
-            </p>
-          </CardContent>
-        </Card>
+      {/* ==========================================
+          OVERVIEW CARDS (METRIK)
+      ========================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Card: Total Klien */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
+            <Users className="w-6 h-6" />
+          </div>
+          <div className="text-3xl font-bold text-foreground">
+            {clients.length}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Semua Klien Terdaftar
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-              Klien Aktif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dataAktif}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Pelanggan aktif bertransaksi
-            </p>
-          </CardContent>
-        </Card>
+        {/* Card: Klien Aktif */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
+            <UserCheck className="w-6 h-6" />
+          </div>
+          <div className="text-2xl font-bold text-foreground">{dataAktif}</div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Pelanggan Aktif Bertransaksi
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Non-aktif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dataNonAktif}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tidak ada aktivitas
-            </p>
-          </CardContent>
-        </Card>
+        {/* Card: Klien Non-aktif */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-muted text-muted-foreground rounded-xl shrink-0 w-fit mb-3">
+            <UserMinus className="w-6 h-6" />
+          </div>
+          <div className="text-2xl font-bold text-foreground">
+            {dataNonAktif}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Tidak Ada Aktivitas
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-sky-700 dark:text-sky-400">
-              Total Invoice Terikat
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTransaksi}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Dari seluruh riwayat klien
-            </p>
-          </CardContent>
-        </Card>
+        {/* Card: Total Transaksi Terikat */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div className="text-2xl font-bold text-foreground">
+            {totalTransaksi}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Total Invoice Terikat
+          </div>
+        </div>
       </div>
 
-      {/* FILTER BAR SECTION */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      {/* ==========================================
+          MAIN CONTENT AREA (FILTER & TABEL)
+      ========================================== */}
+      <div className="flex flex-col gap-5">
+        {/* FILTER BAR SECTION */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
           <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-            <Input
-              placeholder="Cari nama klien atau email..."
-              value={kataKunci}
-              onChange={(e) => {
-                setKataKunci(e.target.value);
-                setHalamanSaatIni(1);
-              }}
-              className="md:max-w-2xs rounded-md"
-            />
+            <div className="relative md:max-w-xs w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama klien atau email..."
+                value={kataKunci}
+                onChange={(e) => {
+                  setKataKunci(e.target.value);
+                  setHalamanSaatIni(1);
+                }}
+                className="pl-9 rounded-xl w-full"
+              />
+            </div>
 
             <Select
               value={filterStatus}
@@ -354,10 +388,10 @@ export default function ClientsPage() {
                 setHalamanSaatIni(1);
               }}
             >
-              <SelectTrigger className="w-full sm:w-[180px] rounded-md">
+              <SelectTrigger className="w-full sm:w-[180px] rounded-xl">
                 <SelectValue placeholder="Filter Status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl">
                 <SelectItem value="Semua">Semua Status</SelectItem>
                 <SelectItem value="Aktif">Aktif</SelectItem>
                 <SelectItem value="Non-aktif">Non-aktif</SelectItem>
@@ -367,22 +401,26 @@ export default function ClientsPage() {
 
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-md shrink-0"
+            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
           >
-            + Tambah Klien
+            <Plus className="w-4 h-4" /> Tambah Klien
           </Button>
         </div>
 
-        {/* Tabel Data */}
-        <div className="border rounded-md bg-card">
+        {/* TABEL DATA */}
+        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-[300px]">Informasi Klien</TableHead>
-                <TableHead>Kontak</TableHead>
-                <TableHead>Total Invoice</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-center w-40">Aksi</TableHead>
+                <TableHead className="w-[300px] font-semibold">
+                  Informasi Klien
+                </TableHead>
+                <TableHead className="font-semibold">Kontak</TableHead>
+                <TableHead className="font-semibold">Total Invoice</TableHead>
+                <TableHead className="font-semibold">Status</TableHead>
+                <TableHead className="text-center w-32 font-semibold">
+                  Aksi
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -390,57 +428,66 @@ export default function ClientsPage() {
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center h-24 text-muted-foreground"
+                    className="text-center h-32 text-muted-foreground"
                   >
                     Tidak ada data klien ditemukan.
                   </TableCell>
                 </TableRow>
               ) : (
                 dataTampil.map((client) => (
-                  <TableRow key={client.id}>
+                  <TableRow
+                    key={client.id}
+                    className="hover:bg-muted/40 transition-colors"
+                  >
                     <TableCell>
-                      <div className="font-semibold text-foreground">
+                      <div className="font-bold text-foreground">
                         {client.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        ID: {client.id}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm font-medium">{client.email}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground mt-0.5">
                         {client.phone}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{client.totalInvoices}</div>
+                      <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit">
+                        {client.totalInvoices}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant="outline"
                         className={
                           client.status === "Aktif"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900 shadow-none"
-                            : "bg-muted text-muted-foreground shadow-none"
+                            ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400 border-0 shadow-none font-semibold"
+                            : "bg-muted text-muted-foreground border-0 shadow-none font-semibold hover:bg-muted"
                         }
                       >
                         {client.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => bukaFormEdit(client)}
-                          className="cursor-pointer"
+                          className="h-8 w-8 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950"
+                          title="Edit"
                         >
-                          Edit
+                          <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
-                          variant="destructive"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => konfirmasiHapus(client.id)}
-                          className="cursor-pointer"
+                          className="h-8 w-8 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950"
+                          title="Hapus"
                         >
-                          Hapus
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -451,10 +498,10 @@ export default function ClientsPage() {
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION */}
+        {/* BOTTOM PAGINATION & LIMIT DATA CONTROLLER */}
         {totalHalaman > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 border-t mt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
               <span>Tampilkan</span>
               <Select
                 value={itemPerHalaman.toString()}
@@ -463,17 +510,17 @@ export default function ClientsPage() {
                   setHalamanSaatIni(1);
                 }}
               >
-                <SelectTrigger className="w-[75px] h-8 rounded-md">
+                <SelectTrigger className="w-[70px] h-7 rounded-md border-0 bg-transparent shadow-none focus:ring-0 px-1 font-semibold text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl">
                   <SelectItem value="5">5</SelectItem>
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                 </SelectContent>
               </Select>
-              <span>baris data per halaman</span>
+              <span>data</span>
             </div>
 
             <Pagination className="w-auto mx-0">
@@ -486,11 +533,12 @@ export default function ClientsPage() {
                       if (halamanSaatIni > 1)
                         setHalamanSaatIni(halamanSaatIni - 1);
                     }}
-                    className={
+                    className={cn(
+                      "rounded-xl",
                       halamanSaatIni === 1
                         ? "pointer-events-none opacity-50"
-                        : ""
-                    }
+                        : "hover:bg-muted",
+                    )}
                   />
                 </PaginationItem>
                 {renderPaginationItems()}
@@ -502,11 +550,12 @@ export default function ClientsPage() {
                       if (halamanSaatIni < totalHalaman)
                         setHalamanSaatIni(halamanSaatIni + 1);
                     }}
-                    className={
+                    className={cn(
+                      "rounded-xl",
                       halamanSaatIni >= totalHalaman
                         ? "pointer-events-none opacity-50"
-                        : ""
-                    }
+                        : "hover:bg-muted",
+                    )}
                   />
                 </PaginationItem>
               </PaginationContent>
@@ -515,128 +564,146 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* FORM DIALOG (TAMBAH / EDIT KLIEN) */}
+      {/* ==========================================
+          FORM DIALOG (TAMBAH / EDIT KLIEN)
+      ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>
-              {formMode === "tambah" ? "Tambah Klien Baru" : "Edit Data Klien"}
-            </DialogTitle>
-            <DialogDescription>
-              {formMode === "tambah"
-                ? "Masukkan detail informasi klien baru."
-                : "Ubah detail informasi klien yang sudah ada."}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
+          <div className="p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-bold">
+                {formMode === "tambah"
+                  ? "Tambah Klien Baru"
+                  : "Edit Data Klien"}
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                {formMode === "tambah"
+                  ? "Lengkapi detail informasi klien di bawah ini."
+                  : "Ubah detail informasi kontak klien yang sudah ada."}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Nama
-              </Label>
-              <Input
-                id="name"
-                placeholder="Nama Lengkap / Perusahaan"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                className="col-span-3 rounded-md"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="email@perusahaan.com"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                className="col-span-3 rounded-md"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone" className="text-right">
-                No. Telepon
-              </Label>
-              <Input
-                id="phone"
-                placeholder="08123456789"
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData({ ...formData, phone: e.target.value })
-                }
-                className="col-span-3 rounded-md"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="statusKlien" className="text-right">
-                Status
-              </Label>
-              <div className="col-span-3">
-                <Select
-                  value={formData.status}
-                  onValueChange={(val: "Aktif" | "Non-aktif") =>
-                    setFormData({ ...formData, status: val })
+            <div className="grid gap-5 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="name" className="font-semibold">
+                  Nama Lengkap / Perusahaan
+                </Label>
+                <Input
+                  id="name"
+                  placeholder="Contoh: PT. Inovasi Bangsa"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
                   }
-                >
-                  <SelectTrigger id="statusKlien" className="w-full rounded-md">
-                    <SelectValue placeholder="Pilih Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Aktif">Aktif</SelectItem>
-                    <SelectItem value="Non-aktif">Non-aktif</SelectItem>
-                  </SelectContent>
-                </Select>
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="email" className="font-semibold">
+                  Alamat Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@perusahaan.com"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="phone" className="font-semibold">
+                    No. Telepon
+                  </Label>
+                  <Input
+                    id="phone"
+                    placeholder="08123456789"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="statusKlien" className="font-semibold">
+                    Status
+                  </Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(val: "Aktif" | "Non-aktif") =>
+                      setFormData({ ...formData, status: val })
+                    }
+                  >
+                    <SelectTrigger
+                      id="statusKlien"
+                      className="w-full rounded-xl"
+                    >
+                      <SelectValue placeholder="Pilih Status" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="Aktif">Aktif</SelectItem>
+                      <SelectItem value="Non-aktif">Non-aktif</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDialogOpen(false)}
-              className="rounded-md"
-            >
-              Batal
-            </Button>
-            <Button onClick={handleSimpan} className="rounded-md">
-              Simpan Data
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="mt-6 border-t pt-4">
+              <Button
+                variant="ghost"
+                onClick={() => setIsDialogOpen(false)}
+                className="rounded-xl"
+              >
+                Batalkan
+              </Button>
+              <Button onClick={handleSimpan} className="rounded-xl shadow-md">
+                <Check className="w-4 h-4 mr-2" /> Simpan Data
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* ALERT DIALOG DELETE KLIEN */}
+      {/* ==========================================
+          ALERT DIALOG DELETE KLIEN
+      ========================================== */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Apakah kamu yakin?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Data klien ini akan dihapus dari daftar. Transaksi yang terkait
-              dengan klien ini mungkin akan kehilangan referensi nama.
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-500">
+              <AlertCircle className="w-5 h-5" />
+              Hapus Data Klien?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm mt-2">
+              Data klien ini akan dihapus permanen dari daftar.
+              <strong className="text-foreground block mt-1">
+                Perhatian: Transaksi (Invoice) yang terkait dengan klien ini
+                mungkin akan kehilangan referensi data kontaknya.
+              </strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               onClick={() => setIdYangDihapus(null)}
-              className="rounded-md"
+              className="rounded-xl"
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={eksekusiHapus}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-md"
+              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md"
             >
               Ya, Hapus Klien
             </AlertDialogAction>

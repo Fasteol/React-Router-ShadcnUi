@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import {
+  Package,
+  TrendingUp,
+  Star,
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  AlertCircle,
+  Check,
+} from "lucide-react";
+import { cn } from "~/lib/utils";
 
 // IMPORT DATA DARI INVOICES.TS
 import { dataLayanan, type Service } from "~/data/invoices";
@@ -10,6 +22,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import { Badge } from "~/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -27,7 +40,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "~/components/ui/pagination";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -268,6 +280,11 @@ export default function ServicesPage() {
               e.preventDefault();
               setHalamanSaatIni(item as number);
             }}
+            className={
+              halamanSaatIni === item
+                ? "rounded-xl"
+                : "rounded-xl hover:bg-muted"
+            }
           >
             {item}
           </PaginationLink>
@@ -277,90 +294,113 @@ export default function ServicesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Daftar Layanan</h1>
-        <p className="text-muted-foreground mt-1">
-          Kelola data layanan dan produk yang ditawarkan.
+    <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* ==========================================
+          HEADER SECTION
+      ========================================== */}
+      <div className="flex flex-col items-start space-y-3 mt-2">
+        <Badge
+          variant="secondary"
+          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm rounded-md"
+        >
+          Katalog Layanan & Produk
+        </Badge>
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+          Daftar Layanan
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
+          Kelola inventaris dan katalog layanan yang ditawarkan ke klien Anda.
+          Data ini akan terintegrasi langsung saat pembuatan invoice baru.
         </p>
       </div>
 
-      {/* OVERVIEW CARDS */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Layanan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalLayanan}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Keseluruhan produk aktif
-            </p>
-          </CardContent>
-        </Card>
+      {/* ==========================================
+          OVERVIEW CARDS (METRIK)
+      ========================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Card: Total Layanan */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
+            <Package className="w-6 h-6" />
+          </div>
+          <div className="text-3xl font-bold text-foreground">
+            {totalLayanan}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Keseluruhan Layanan Aktif
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-              Rata-rata Harga
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              Rp {rataRataHarga.toLocaleString("id-ID")}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Dari seluruh layanan
-            </p>
-          </CardContent>
-        </Card>
+        {/* Card: Rata-rata Harga */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div className="text-2xl font-bold text-foreground">
+            Rp {rataRataHarga.toLocaleString("id-ID")}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Rata-rata Harga Pasar
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Layanan Premium
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{layananPremium}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Harga di atas Rp 3.000.000
-            </p>
-          </CardContent>
-        </Card>
+        {/* Card: Layanan Premium */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
+            <Star className="w-6 h-6" />
+          </div>
+          <div className="text-2xl font-bold text-foreground">
+            {layananPremium}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Layanan Premium (≥ Rp 3.000.000)
+          </div>
+        </div>
       </div>
 
-      {/* FILTER BAR SECTION */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <Input
-            placeholder="Cari ID, nama, atau deskripsi layanan..."
-            value={kataKunci}
-            onChange={(e) => {
-              setKataKunci(e.target.value);
-              setHalamanSaatIni(1);
-            }}
-            className="md:max-w-xs rounded-md"
-          />
+      {/* ==========================================
+          MAIN CONTENT AREA (FILTER & TABEL)
+      ========================================== */}
+      <div className="flex flex-col gap-5">
+        {/* FILTER BAR SECTION */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
+          <div className="relative flex-1 md:max-w-md w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari ID, nama, atau deskripsi layanan..."
+              value={kataKunci}
+              onChange={(e) => {
+                setKataKunci(e.target.value);
+                setHalamanSaatIni(1);
+              }}
+              className="pl-9 rounded-xl w-full"
+            />
+          </div>
 
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-md shrink-0"
+            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
           >
-            + Tambah Layanan
+            <Plus className="w-4 h-4" /> Tambah Layanan
           </Button>
         </div>
 
         {/* TABEL DATA */}
-        <div className="border rounded-md bg-card">
+        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-24">ID</TableHead>
-                <TableHead className="w-1/3">Nama Layanan</TableHead>
-                <TableHead>Deskripsi</TableHead>
-                <TableHead className="text-right">Harga (Rp)</TableHead>
-                <TableHead className="text-center w-40">Aksi</TableHead>
+                <TableHead className="w-24 font-semibold">ID</TableHead>
+                <TableHead className="w-1/3 font-semibold">
+                  Nama Layanan
+                </TableHead>
+                <TableHead className="font-semibold">Deskripsi</TableHead>
+                <TableHead className="text-right font-semibold">
+                  Harga (Rp)
+                </TableHead>
+                <TableHead className="text-center w-32 font-semibold">
+                  Aksi
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -368,43 +408,57 @@ export default function ServicesPage() {
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center h-24 text-muted-foreground"
+                    className="text-center h-32 text-muted-foreground"
                   >
                     Tidak ada data layanan ditemukan.
                   </TableCell>
                 </TableRow>
               ) : (
                 dataTampil.map((layanan) => (
-                  <TableRow key={layanan.id}>
-                    <TableCell className="font-medium text-foreground">
+                  <TableRow
+                    key={layanan.id}
+                    className="hover:bg-muted/40 transition-colors"
+                  >
+                    <TableCell className="font-semibold text-muted-foreground">
                       {layanan.id}
                     </TableCell>
-                    <TableCell className="font-semibold">
-                      {layanan.nama}
+                    <TableCell>
+                      <div className="font-bold text-foreground">
+                        {layanan.nama}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm truncate max-w-[200px]">
-                      {layanan.deskripsi}
+                    <TableCell>
+                      <p
+                        className="text-muted-foreground text-sm truncate max-w-[250px]"
+                        title={layanan.deskripsi}
+                      >
+                        {layanan.deskripsi}
+                      </p>
                     </TableCell>
-                    <TableCell className="text-right font-medium">
-                      Rp {layanan.harga.toLocaleString("id-ID")}
+                    <TableCell className="text-right">
+                      <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit ml-auto">
+                        Rp {layanan.harga.toLocaleString("id-ID")}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => bukaFormEdit(layanan)}
-                          className="cursor-pointer"
+                          className="h-8 w-8 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950"
+                          title="Edit"
                         >
-                          Edit
+                          <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
-                          variant="destructive"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => konfirmasiHapus(layanan.id)}
-                          className="cursor-pointer"
+                          className="h-8 w-8 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950"
+                          title="Hapus"
                         >
-                          Hapus
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -417,8 +471,8 @@ export default function ServicesPage() {
 
         {/* BOTTOM PAGINATION & LIMIT DATA CONTROLLER */}
         {totalHalaman > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 border-t mt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
               <span>Tampilkan</span>
               <Select
                 value={itemPerHalaman.toString()}
@@ -427,17 +481,17 @@ export default function ServicesPage() {
                   setHalamanSaatIni(1);
                 }}
               >
-                <SelectTrigger className="w-[75px] h-8 rounded-md">
+                <SelectTrigger className="w-[70px] h-7 rounded-md border-0 bg-transparent shadow-none focus:ring-0 px-1 font-semibold text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl">
                   <SelectItem value="5">5</SelectItem>
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                 </SelectContent>
               </Select>
-              <span>baris per halaman</span>
+              <span>data</span>
             </div>
 
             <Pagination className="w-auto mx-0">
@@ -450,11 +504,12 @@ export default function ServicesPage() {
                       if (halamanSaatIni > 1)
                         setHalamanSaatIni(halamanSaatIni - 1);
                     }}
-                    className={
+                    className={cn(
+                      "rounded-xl",
                       halamanSaatIni === 1
                         ? "pointer-events-none opacity-50"
-                        : ""
-                    }
+                        : "hover:bg-muted",
+                    )}
                   />
                 </PaginationItem>
                 {renderPaginationItems()}
@@ -466,11 +521,12 @@ export default function ServicesPage() {
                       if (halamanSaatIni < totalHalaman)
                         setHalamanSaatIni(halamanSaatIni + 1);
                     }}
-                    className={
+                    className={cn(
+                      "rounded-xl",
                       halamanSaatIni >= totalHalaman
                         ? "pointer-events-none opacity-50"
-                        : ""
-                    }
+                        : "hover:bg-muted",
+                    )}
                   />
                 </PaginationItem>
               </PaginationContent>
@@ -479,121 +535,135 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {/* FORM DIALOG (TAMBAH / EDIT) */}
+      {/* ==========================================
+          FORM DIALOG (TAMBAH / EDIT)
+      ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>
-              {formMode === "tambah"
-                ? "Tambah Layanan Baru"
-                : "Edit Data Layanan"}
-            </DialogTitle>
-            <DialogDescription>
-              {formMode === "tambah"
-                ? "Masukkan detail layanan atau produk baru."
-                : "Ubah detail layanan yang sudah ada."}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
+          <div className="p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-bold">
+                {formMode === "tambah"
+                  ? "Tambah Layanan Baru"
+                  : "Ubah Data Layanan"}
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                {formMode === "tambah"
+                  ? "Masukkan detail informasi untuk layanan atau produk baru."
+                  : "Sesuaikan kembali informasi detail layanan yang sudah ada."}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            {/* ID LAYANAN */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="id" className="text-right">
-                ID
-              </Label>
-              <Input
-                id="id"
-                value={formData.id}
-                disabled
-                className="col-span-3 rounded-md bg-muted"
-              />
+            <div className="grid gap-5 py-2">
+              {/* ID LAYANAN */}
+              <div className="grid gap-2">
+                <Label
+                  htmlFor="id"
+                  className="font-semibold text-muted-foreground"
+                >
+                  ID Layanan
+                </Label>
+                <Input
+                  id="id"
+                  value={formData.id}
+                  disabled
+                  className="rounded-xl bg-muted/50 font-bold"
+                />
+              </div>
+
+              {/* NAMA LAYANAN */}
+              <div className="grid gap-2">
+                <Label htmlFor="nama" className="font-semibold">
+                  Nama Layanan / Produk
+                </Label>
+                <Input
+                  id="nama"
+                  placeholder="Cth: Jasa Desain UI/UX"
+                  value={formData.nama}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nama: e.target.value })
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+
+              {/* DESKRIPSI LAYANAN */}
+              <div className="grid gap-2">
+                <Label htmlFor="deskripsi" className="font-semibold">
+                  Deskripsi Lengkap
+                </Label>
+                <Textarea
+                  id="deskripsi"
+                  placeholder="Jelaskan spesifikasi detail mengenai layanan yang ditawarkan..."
+                  value={formData.deskripsi}
+                  onChange={(e) =>
+                    setFormData({ ...formData, deskripsi: e.target.value })
+                  }
+                  className="rounded-xl min-h-[100px] resize-none"
+                />
+              </div>
+
+              {/* HARGA LAYANAN */}
+              <div className="grid gap-2">
+                <Label htmlFor="harga" className="font-semibold">
+                  Harga Patokan (Rp)
+                </Label>
+                <Input
+                  id="harga"
+                  placeholder="Rp 0"
+                  value={inputHarga}
+                  onChange={handleUbahHarga}
+                  className="font-bold rounded-xl text-lg h-12 bg-primary/5 border-primary/20 text-primary focus-visible:ring-primary/30"
+                />
+              </div>
             </div>
 
-            {/* NAMA LAYANAN */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="nama" className="text-right">
-                Nama
-              </Label>
-              <Input
-                id="nama"
-                placeholder="Cth: Web Development"
-                value={formData.nama}
-                onChange={(e) =>
-                  setFormData({ ...formData, nama: e.target.value })
-                }
-                className="col-span-3 rounded-md"
-              />
-            </div>
-
-            {/* DESKRIPSI LAYANAN */}
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="deskripsi" className="text-right mt-2">
-                Deskripsi
-              </Label>
-              <Textarea
-                id="deskripsi"
-                placeholder="Jelaskan detail layanan..."
-                value={formData.deskripsi}
-                onChange={(e) =>
-                  setFormData({ ...formData, deskripsi: e.target.value })
-                }
-                className="col-span-3 rounded-md min-h-[80px]"
-              />
-            </div>
-
-            {/* HARGA LAYANAN */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="harga" className="text-right">
-                Harga
-              </Label>
-              <Input
-                id="harga"
-                placeholder="Rp 0"
-                value={inputHarga} // Menggunakan state khusus untuk visual
-                onChange={handleUbahHarga} // Handler khusus format Rp
-                className="col-span-3 font-medium rounded-md"
-              />
-            </div>
+            <DialogFooter className="mt-6 border-t pt-4">
+              <Button
+                variant="ghost"
+                onClick={() => setIsDialogOpen(false)}
+                className="rounded-xl"
+              >
+                Batalkan
+              </Button>
+              <Button onClick={handleSimpan} className="rounded-xl shadow-md">
+                <Check className="w-4 h-4 mr-2" /> Simpan Katalog
+              </Button>
+            </DialogFooter>
           </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDialogOpen(false)}
-              className="rounded-md"
-            >
-              Batal
-            </Button>
-            <Button onClick={handleSimpan} className="rounded-md">
-              Simpan Data
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ALERT DIALOG DELETE */}
+      {/* ==========================================
+          ALERT DIALOG DELETE
+      ========================================== */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Apakah kamu yakin?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tindakan ini tidak bisa dibatalkan. Data layanan{" "}
-              <strong>{idYangDihapus}</strong> akan dihapus secara permanen.
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-500">
+              <AlertCircle className="w-5 h-5" />
+              Hapus Data Layanan?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm mt-2">
+              Tindakan ini tidak bisa dibatalkan. Layanan dengan ID{" "}
+              <strong className="text-foreground">{idYangDihapus}</strong> akan
+              dihapus permanen dari daftar katalog produk.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               onClick={() => setIdYangDihapus(null)}
-              className="rounded-md"
+              className="rounded-xl"
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={eksekusiHapus}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-md"
+              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md"
             >
               Ya, Hapus Data
             </AlertDialogAction>

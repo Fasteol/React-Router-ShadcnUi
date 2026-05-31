@@ -36,6 +36,16 @@ export type AdminSettings = {
   };
 };
 
+// ==========================================
+// DATA PENGGUNA (USERS) UNTUK SISTEM AUTH
+// ==========================================
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  password: string; // Dalam dunia nyata ini di-hash, tapi untuk dummy kita simpan teks biasa
+};
+
 export type Service = {
   id: string;
   nama: string;
@@ -77,6 +87,15 @@ const pilihanMetode = [
   "Dana",
   "ShopeePay",
   "QRIS",
+];
+
+export const defaultUsers: User[] = [
+  {
+    id: "USR-001",
+    name: "Razan Muhammad Fauzan Sya'bani",
+    email: "razan@fauzansyabani.dev",
+    password: "password123", // Password default untuk testing
+  },
 ];
 
 export const daftarKlien = [

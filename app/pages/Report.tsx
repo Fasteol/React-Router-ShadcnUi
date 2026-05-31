@@ -28,6 +28,22 @@ import { Badge } from "~/components/ui/badge";
 import { toast } from "sonner";
 import { dataAwal } from "~/data/invoices";
 
+// IMPORT ICONS
+import {
+  BarChart3,
+  Wallet,
+  Clock,
+  TrendingUp,
+  Activity,
+  Trophy,
+  CreditCard,
+  Download,
+  PieChart,
+  PackageCheck,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-react";
+
 // ==========================================
 // UTILITY: Parsing & Formatting Mata Uang
 // ==========================================
@@ -56,12 +72,17 @@ export default function ReportsPage() {
 
     const pendapatanKlien: Record<string, number> = {};
     const popularitasMetode: Record<string, number> = {};
+    const popularitasLayanan: Record<
+      string,
+      { count: number; revenue: number }
+    > = {};
     const klienUnik = new Set<string>();
 
     dataAwal.forEach((inv) => {
       const nominal = parseRupiah(inv.totalAmount);
       klienUnik.add(inv.clientName);
 
+      // Hitung Status
       switch (inv.paymentStatus) {
         case "Lunas":
           totalPendapatan += nominal;
@@ -82,27 +103,60 @@ export default function ReportsPage() {
           break;
       }
 
+      // Hitung Metode Pembayaran
       popularitasMetode[inv.paymentMethod] =
         (popularitasMetode[inv.paymentMethod] || 0) + 1;
+
+      // Hitung Layanan Terpopuler (Berdasarkan rincian services)
+      if (inv.services && Array.isArray(inv.services)) {
+        inv.services.forEach((svc) => {
+          if (!popularitasLayanan[svc.nama]) {
+            popularitasLayanan[svc.nama] = { count: 0, revenue: 0 };
+          }
+          popularitasLayanan[svc.nama].count += 1;
+          // Hitung revenue layanan hanya jika invoice statusnya Lunas (opsional, disini dihitung semua potensinya)
+          popularitasLayanan[svc.nama].revenue += svc.harga;
+        });
+      }
     });
 
     const totalInvoices = dataAwal.length;
 
+    // Metrik Tambahan
+    const rataRataTransaksi = countLunas > 0 ? totalPendapatan / countLunas : 0;
+    const totalTagihanBerjalan = countLunas + countPending + countBelumBayar;
+    const collectionRate =
+      totalTagihanBerjalan > 0 ? (countLunas / totalTagihanBerjalan) * 100 : 0;
+
+    // Sort Klien Top 5
     const topKlien = Object.entries(pendapatanKlien)
       .map(([nama, total]) => ({ nama, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
 
-    // Menampilkan semua metode tanpa dibatasi (akan diatur via Grid UI)
+    // Sort Metode Top 4
     const topMetode = Object.entries(popularitasMetode)
       .map(([metode, count]) => ({ metode, count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+
+    // Sort Layanan Top 4
+    const topLayanan = Object.entries(popularitasLayanan)
+      .map(([nama, data]) => ({
+        nama,
+        count: data.count,
+        revenue: data.revenue,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
 
     return {
       totalPendapatan,
       totalTertunda,
       totalInvoices,
       totalKlienAktif: klienUnik.size,
+      rataRataTransaksi,
+      collectionRate,
       distribusi: {
         lunas: (countLunas / totalInvoices) * 100,
         pending: (countPending / totalInvoices) * 100,
@@ -117,6 +171,7 @@ export default function ReportsPage() {
       },
       topKlien,
       topMetode,
+      topLayanan,
     };
   }, []);
 
@@ -125,131 +180,163 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-10 pb-16">
-      {/* HEADER */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Laporan Finansial</h1>
-        <p className="text-muted-foreground">
-          Tinjau ringkasan pendapatan, analisis klien teratas, dan ekspor data
-          operasional.
+    <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+      {/* ==========================================
+          HEADER SECTION
+      ========================================== */}
+      <div className="flex flex-col items-start space-y-3 mt-2">
+        <Badge
+          variant="secondary"
+          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm rounded-md"
+        >
+          Modul Analitik & Pelaporan
+        </Badge>
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+          Laporan Finansial
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
+          Tinjau ringkasan pendapatan, analisis performa klien, tren layanan
+          terpopuler, dan ekspor data operasional secara komprehensif.
         </p>
       </div>
 
       <div className="space-y-6">
         {/* ==========================================
-            SECTION 1: IKHTISAR KEUANGAN
+            SECTION 1: IKHTISAR KEUANGAN (METRIK UTAMA)
         ========================================== */}
         <section>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
-            <Card className="rounded-lg shadow-sm border-border">
-              <CardContent className="p-6">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Total Pendapatan (Lunas)
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                  {formatRupiah(stats.totalPendapatan)}
-                </p>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Card 1: Total Pendapatan */}
+            <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+              <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold text-foreground truncate">
+                {formatRupiah(stats.totalPendapatan)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 font-medium">
+                Total Pendapatan (Lunas)
+              </div>
+            </div>
 
-            <Card className="rounded-lg shadow-sm border-border">
-              <CardContent className="p-6">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Potensi & Tertunda
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-                  {formatRupiah(stats.totalTertunda)}
-                </p>
-              </CardContent>
-            </Card>
+            {/* Card 2: Potensi Tertunda */}
+            <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold text-foreground truncate">
+                {formatRupiah(stats.totalTertunda)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 font-medium">
+                Piutang & Tertunda
+              </div>
+            </div>
 
-            <Card className="rounded-lg shadow-sm border-border">
-              <CardContent className="p-6">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Total Invoice
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight">
-                  {stats.totalInvoices}{" "}
-                  <span className="text-base font-normal text-muted-foreground">
-                    Dokumen
-                  </span>
-                </p>
-              </CardContent>
-            </Card>
+            {/* Card 3: Rata-Rata Transaksi */}
+            <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+              <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl shrink-0 w-fit mb-3">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold text-foreground truncate">
+                {formatRupiah(stats.rataRataTransaksi)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 font-medium">
+                Nilai Rata-rata Transaksi
+              </div>
+            </div>
 
-            <Card className="rounded-lg shadow-sm border-border">
-              <CardContent className="p-6">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Klien Aktif
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight">
-                  {stats.totalKlienAktif}{" "}
-                  <span className="text-base font-normal text-muted-foreground">
-                    Entitas
-                  </span>
-                </p>
-              </CardContent>
-            </Card>
+            {/* Card 4: Collection Rate */}
+            <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+              <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-xl shrink-0 w-fit mb-3">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold text-foreground truncate">
+                {stats.collectionRate.toFixed(1)}%
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 font-medium">
+                Tingkat Kolektibilitas (Success Rate)
+              </div>
+            </div>
           </div>
         </section>
 
         {/* ==========================================
-            SECTION 2: BENTO GRID (LAYOUT BARU)
+            SECTION 2: BENTO GRID (ANALITIK MENDALAM)
         ========================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* --- BARIS 1, KOLOM KIRI-TENGAH (SPAN 2) --- */}
-          <Card className="lg:col-span-2 flex flex-col h-full rounded-lg shadow-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Klien Teratas Berdasarkan Pendapatan
+          {/* --- BARIS 1, KOLOM KIRI (SPAN 2) --- */}
+          <Card className="lg:col-span-2 flex flex-col h-full rounded-2xl shadow-sm border-border overflow-hidden">
+            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-emerald-500" />
+                Klien Teratas Berdasarkan Omzet
               </CardTitle>
               <CardDescription>
-                Lima penyumbang pendapatan terbesar (status lunas).
+                Lima entitas penyumbang pendapatan terbesar dari transaksi yang
+                telah lunas.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Klien</TableHead>
-                    <TableHead className="text-right">
-                      Total Pendapatan
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stats.topKlien.length === 0 ? (
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/30">
                     <TableRow>
-                      <TableCell
-                        colSpan={2}
-                        className="text-center text-muted-foreground py-6"
-                      >
-                        Belum ada data pendapatan lunas.
-                      </TableCell>
+                      <TableHead className="w-16 text-center">
+                        Peringkat
+                      </TableHead>
+                      <TableHead>Nama Klien / Entitas</TableHead>
+                      <TableHead className="text-right">
+                        Total Pendapatan
+                      </TableHead>
                     </TableRow>
-                  ) : (
-                    stats.topKlien.map((klien, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {klien.nama}
-                        </TableCell>
-                        <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-semibold">
-                          {formatRupiah(klien.total)}
+                  </TableHeader>
+                  <TableBody>
+                    {stats.topKlien.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={3}
+                          className="text-center text-muted-foreground py-8"
+                        >
+                          Belum ada data pendapatan lunas.
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : (
+                      stats.topKlien.map((klien, index) => (
+                        <TableRow
+                          key={index}
+                          className="hover:bg-muted/40 transition-colors"
+                        >
+                          <TableCell className="text-center font-bold text-muted-foreground">
+                            #{index + 1}
+                          </TableCell>
+                          <TableCell className="font-semibold text-foreground">
+                            {klien.nama}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-md font-bold text-sm inline-block">
+                              {formatRupiah(klien.total)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
           {/* --- BARIS 1, KOLOM KANAN (SPAN 1) --- */}
-          <Card className="lg:col-span-1 flex flex-col h-full rounded-lg shadow-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-base">Distribusi Status</CardTitle>
+          <Card className="lg:col-span-1 flex flex-col h-full rounded-2xl shadow-sm border-border overflow-hidden">
+            <div className="h-1.5 w-full bg-gradient-to-r from-primary to-primary/60"></div>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-primary" />
+                Distribusi Status Tagihan
+              </CardTitle>
               <CardDescription>
-                Persentase {stats.totalInvoices} invoice.
+                Persentase dari total {stats.totalInvoices} dokumen invoice.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -270,7 +357,7 @@ export default function ReportsPage() {
                   label: "Belum Bayar",
                   count: stats.counts.belumBayar,
                   pct: stats.distribusi.belumBayar,
-                  color: "bg-blue-500",
+                  color: "bg-sky-500",
                 },
                 {
                   label: "Gagal",
@@ -281,16 +368,22 @@ export default function ReportsPage() {
               ].map((item) => (
                 <div key={item.label} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">
-                      {item.label} ({item.count})
+                    <span className="font-bold flex items-center gap-2">
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full ${item.color}`}
+                      ></div>
+                      {item.label}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        ({item.count})
+                      </span>
                     </span>
-                    <span className="text-muted-foreground">
+                    <span className="font-semibold text-muted-foreground">
                       {item.pct.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 border border-border/50">
                     <div
-                      className={`h-full ${item.color}`}
+                      className={`h-full rounded-full transition-all duration-1000 ${item.color}`}
                       style={{ width: `${item.pct}%` }}
                     />
                   </div>
@@ -299,33 +392,85 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          {/* --- BARIS 2, KOLOM KIRI-TENGAH (SPAN 2) --- */}
-          <Card className="lg:col-span-2 flex flex-col h-full rounded-lg shadow-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Preferensi Metode Pembayaran
+          {/* --- BARIS 2, KOLOM KIRI (SPAN 1) --- */}
+          <Card className="flex flex-col h-full rounded-2xl shadow-sm border-border">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <PackageCheck className="w-5 h-5 text-indigo-500" />
+                Layanan Terpopuler
               </CardTitle>
               <CardDescription>
-                Metode transaksi yang digunakan oleh klien.
+                Produk/layanan paling sering ditagihkan.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* Item metode dipecah jadi 2 kolom agar tidak kepanjangan ke bawah */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                {stats.topLayanan.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-4 italic">
+                    Belum ada data rincian layanan.
+                  </div>
+                ) : (
+                  stats.topLayanan.map((item, index) => (
+                    <div
+                      key={item.nama}
+                      className="flex items-center justify-between p-3 border rounded-xl bg-card hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <span className="flex shrink-0 items-center justify-center w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
+                          #{index + 1}
+                        </span>
+                        <div className="truncate">
+                          <p className="font-semibold text-sm truncate">
+                            {item.nama}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatRupiah(item.revenue)}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className="font-bold shrink-0 shadow-none"
+                      >
+                        {item.count}x
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* --- BARIS 2, KOLOM TENGAH (SPAN 1) --- */}
+          <Card className="flex flex-col h-full rounded-2xl shadow-sm border-border">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-500" />
+                Metode Pembayaran
+              </CardTitle>
+              <CardDescription>
+                Preferensi transaksi pembayaran klien.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-3">
                 {stats.topMetode.map((item, index) => (
                   <div
                     key={item.metode}
-                    className="flex items-center justify-between p-3 border rounded-md bg-card"
+                    className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                      <span className="flex shrink-0 items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold">
                         {index + 1}
                       </span>
-                      <span className="font-medium">{item.metode}</span>
+                      <span className="font-semibold text-sm">
+                        {item.metode}
+                      </span>
                     </div>
-                    <Badge variant="secondary" className="font-normal">
-                      {item.count} Transaksi
-                    </Badge>
+                    <span className="text-sm font-bold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-md">
+                      {item.count}{" "}
+                      <span className="font-normal text-xs">Trx</span>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -333,19 +478,25 @@ export default function ReportsPage() {
           </Card>
 
           {/* --- BARIS 2, KOLOM KANAN (SPAN 1) --- */}
-          <Card className="lg:col-span-1 flex flex-col h-full rounded-lg shadow-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-base">Ekspor Data</CardTitle>
-              <CardDescription>Unduh rekapitulasi audit.</CardDescription>
+          <Card className="flex flex-col h-full rounded-2xl shadow-sm border-border overflow-hidden">
+            <div className="h-1.5 w-full bg-muted/60"></div>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Download className="w-5 h-5 text-foreground" />
+                Ekspor Laporan
+              </CardTitle>
+              <CardDescription>
+                Unduh rekapitulasi audit dan transaksi.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 space-y-6">
+            <CardContent className="flex-1 space-y-5">
               <div className="space-y-2">
-                <Label>Periode Data</Label>
+                <Label className="font-semibold">Periode Data</Label>
                 <Select value={periodeExport} onValueChange={setPeriodeExport}>
-                  <SelectTrigger className="w-full rounded-md">
+                  <SelectTrigger className="w-full rounded-xl bg-muted/30">
                     <SelectValue placeholder="Pilih Periode" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="all">Semua Waktu</SelectItem>
                     <SelectItem value="q1_2026">
                       Kuartal 1 (Jan - Mar 2026)
@@ -359,27 +510,41 @@ export default function ReportsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Format File</Label>
+                <Label className="font-semibold">Format File Output</Label>
                 <Select value={formatExport} onValueChange={setFormatExport}>
-                  <SelectTrigger className="w-full rounded-md">
+                  <SelectTrigger className="w-full rounded-xl bg-muted/30">
                     <SelectValue placeholder="Pilih Format" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="csv">CSV (Spreadsheet)</SelectItem>
-                    <SelectItem value="pdf">PDF (Dokumen Cetak)</SelectItem>
-                    <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="csv">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-500" />{" "}
+                        CSV (Spreadsheet)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="pdf">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-red-500" /> PDF
+                        (Dokumen Cetak)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="xlsx">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-emerald-600" /> Excel
+                        (.xlsx)
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardContent>
 
-            {/* mt-auto memastikan letak tombol konsisten di bawah */}
-            <CardFooter className="mt-auto border-t bg-muted/40 px-6 py-4">
+            <CardFooter className="mt-auto border-t bg-muted/10 px-6 py-5">
               <Button
                 onClick={handleExport}
-                className="w-full cursor-pointer rounded-md"
+                className="w-full cursor-pointer rounded-xl font-bold gap-2 shadow-sm"
               >
-                Proses & Unduh
+                <Download className="w-4 h-4" /> Proses & Unduh Dokumen
               </Button>
             </CardFooter>
           </Card>

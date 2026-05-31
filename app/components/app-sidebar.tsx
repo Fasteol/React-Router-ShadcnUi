@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   ReceiptText,
@@ -11,7 +12,6 @@ import {
   Settings,
   GalleryVerticalEnd,
   AudioWaveform,
-  Command,
 } from "lucide-react";
 
 import { NavMain } from "~/components/nav-main";
@@ -26,13 +26,8 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-// Data Kustom untuk Billify
-const data = {
-  user: {
-    name: "Razan Sya'bani",
-    email: "razan@fauzansyabani.dev",
-    avatar: "/avatars/razan.jpg",
-  },
+// Pisahkan data navigasi statis (Menu dan Tim) dari data User
+const navData = {
   teams: [
     { name: "Billify", logo: GalleryVerticalEnd, plan: "" },
     { name: "Personal Proj", logo: AudioWaveform, plan: "Free" },
@@ -51,22 +46,46 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  // 1. Buat state untuk menampung data user sementara (fallback jika gagal dimuat)
+  const [currentUser, setCurrentUser] = useState({
+    name: "Memuat...",
+    email: "memuat@sistem...",
+    avatar: "", // Akan menggunakan avatar inisial (fallback) dari komponen NavUser
+  });
+
+  // 2. Gunakan useEffect untuk mengambil data asli dari localStorage setelah komponen dirender
+  useEffect(() => {
+    const storedUser = localStorage.getItem("currentUser");
+
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setCurrentUser({
+        name: parsedUser.name,
+        email: parsedUser.email,
+        // Karena kita tidak menyimpan foto profil di dummy data, kita biarkan kosong.
+        // Shadcn UI (NavUser) biasanya otomatis membuat inisial huruf jika avatar kosong.
+        avatar: "",
+      });
+    }
+  }, []);
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={navData.teams} />
       </SidebarHeader>
 
       <SidebarContent>
-        {/* NavMain di sini akan merender daftar menu utama */}
-        <NavMain items={data.navMain} />
+        {/* NavMain merender daftar menu utama */}
+        <NavMain items={navData.navMain} />
 
-        {/* NavProjects bisa kita gunakan untuk menu Sistem/Tambahan */}
-        <NavProjects projects={data.projects} />
+        {/* NavProjects merender menu Sistem/Tambahan */}
+        <NavProjects projects={navData.projects} />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={data.user} />
+        {/* 3. Masukkan state currentUser ke dalam komponen NavUser */}
+        <NavUser user={currentUser} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

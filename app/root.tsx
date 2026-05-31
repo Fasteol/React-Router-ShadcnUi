@@ -1,13 +1,15 @@
 import {
   isRouteErrorResponse,
-  Link,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
   useLocation,
+  useNavigate,
 } from "react-router";
+
+import { useEffect, useState } from "react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -19,22 +21,12 @@ import { Toaster } from "~/components/ui/sonner";
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger, // Penting untuk tombol buka/tutup
+  SidebarTrigger,
 } from "~/components/ui/sidebar";
 import { AppSidebar } from "~/components/app-sidebar";
 
 // Import Ikon dari Lucide Icons
-import {
-  Menu,
-  LayoutDashboard,
-  ReceiptText,
-  Info,
-  Settings,
-  BarChart3,
-  Moon,
-  Sun,
-  User,
-} from "lucide-react";
+import { Moon, Sun, User } from "lucide-react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -77,17 +69,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
 // 2. SUB-KOMPONEN KONTEN LAYOUT (Tempat Logika Navigasi & UI Berada)
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const [headerUser, setHeaderUser] = useState({ name: "Admin" });
 
-  const navItems = [
-    { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    { name: "Transaction", path: "/transaction", icon: ReceiptText },
-    { name: "Client", path: "/client", icon: User },
-    { name: "Reports", path: "/report", icon: BarChart3 },
-    { name: "About", path: "/about", icon: Info },
-    { name: "Settings", path: "/setting", icon: Settings },
-  ];
+  // ==========================================
+  // LOGIKA PENGECEKAN HALAMAN AUTHENTICATION
+  // ==========================================
+  const isAuthPage =
+    location.pathname === "/login" || location.pathname === "/register";
 
+  // ==========================================
+  // LOGIKA ROUTE PROTECTION (Mencegah Akses Tanpa Login)
+  // ==========================================
+  useEffect(() => {
+    // Ambil status login dari local storage
+    const isLoggedIn = localStorage.getItem("isLoggedIn");
+
+    // Jika belum login DAN bukan berada di halaman Auth, tendang ke halaman /login
+    if (!isLoggedIn && !isAuthPage) {
+      navigate("/login");
+    }
+
+    const storedUser = localStorage.getItem("currentUser");
+    if (storedUser) {
+      setHeaderUser(JSON.parse(storedUser));
+    }
+  }, [location.pathname, navigate, isAuthPage, location.pathname]); // akan jalan setiap kali ganti route (URL)
+
+  if (isAuthPage) {
+    return (
+      <main className="flex-1 w-full min-h-screen bg-background">
+        {children}
+      </main>
+    );
+  }
+
+  // Jika BUKAN di halaman Auth, render Layout utuh (Dashboard dkk)
   return (
     <div className="flex min-h-screen w-full">
       {/* === SIDEBAR DESKTOP (Permanen) === */}
@@ -107,7 +125,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-full w-9 h-9"
+                  className="rounded-full w-9 h-9 cursor-pointer"
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 >
                   <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -115,14 +133,14 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                   <span className="sr-only">Toggle theme</span>
                 </Button>
 
-                {/* Profil User (Simbolis) */}
+                {/* Profil User di Header root.tsx */}
                 <div className="flex items-center gap-2 pl-2">
                   <div className="hidden md:flex flex-col items-end mr-1">
                     <span className="text-xs font-medium leading-none">
-                      Admin
+                      Administrator
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Razan Sya'bani
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                      {headerUser.name}
                     </span>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
