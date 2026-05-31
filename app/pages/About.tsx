@@ -34,6 +34,9 @@ import {
   Cpu,
   History,
   GitCommitHorizontal,
+  Rocket,
+  Database,
+  Bell, // Tambahan ikon bell
 } from "lucide-react";
 
 export default function AboutPage() {
@@ -49,7 +52,7 @@ export default function AboutPage() {
           variant="secondary"
           className="px-4 py-1.5 text-xs font-semibold dark:bg-muted/50 border shadow-sm text-primary"
         >
-          Versi 3.1.0 (Notifikasi Dinamis & Keamanan Akun)
+          Versi 4.1.0 (Zustand & Dynamic Notifications)
         </Badge>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
           Tentang Sistem Invoice & Manajemen
@@ -183,14 +186,26 @@ export default function AboutPage() {
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+              <Database className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Keamanan & Otorisasi Transparan:
+                  Single Source of Truth (SSOT):
                 </strong>{" "}
-                Sistem <i>login</i> terlindungi, panel pembaruan sandi dinamis,
-                serta manajemen peran berbasis <i>tier</i> untuk memastikan
-                histori pengaturan terkontrol dengan aman.
+                Sinkronisasi data real-time antar halaman berkat implementasi
+                Global Store. Merubah status tagihan akan otomatis memperbarui
+                statistik metrik dashboard dan klien.
+              </p>
+            </div>
+            {/* TAMBAHAN FITUR NOTIFIKASI */}
+            <div className="flex items-start gap-3">
+              <Bell className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong className="text-foreground">
+                  Notifikasi Aktivitas Dinamis:
+                </strong>{" "}
+                Sistem pencatatan log event cerdas yang secara otomatis memantau
+                aksi pengguna (seperti pelunasan invoice atau penambahan klien)
+                dan menampilkannya secara langsung di pusat notifikasi.
               </p>
             </div>
             <div className="flex items-start gap-3">
@@ -234,11 +249,14 @@ export default function AboutPage() {
               <Badge variant="outline" className="rounded-md">
                 Shadcn UI
               </Badge>
-              <Badge variant="outline" className="rounded-md">
-                Recharts & XLSX
+              <Badge
+                variant="outline"
+                className="rounded-md border-primary/30 text-primary bg-primary/5"
+              >
+                Zustand Global State
               </Badge>
               <Badge variant="outline" className="rounded-md">
-                React Hooks (useMemo)
+                Recharts & XLSX
               </Badge>
             </div>
 
@@ -269,15 +287,15 @@ export default function AboutPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="relative border-l-2 border-muted ml-3 space-y-8 pb-4">
-              {/* V 3.1.0 */}
+            <div className="relative border-l-2 border-muted ml-3 space-y-8 pb-4 h-96 overflow-y-auto custom-scrollbar pr-4">
+              {/* V 4.1.0 (BARU DITAMBAHKAN) */}
               <div className="relative pl-8">
                 <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center ring-4 ring-background">
-                  <GitCommitHorizontal className="w-3 h-3 text-primary-foreground" />
+                  <Rocket className="w-3 h-3 text-primary-foreground" />
                 </span>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
                   <h3 className="font-bold text-foreground text-base">
-                    Versi 3.1.0
+                    Versi 4.1.0
                   </h3>
                   <Badge className="w-fit bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-0 shadow-none font-semibold">
                     Rilis Terbaru (Current)
@@ -286,24 +304,134 @@ export default function AboutPage() {
                 <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
                   <li>
                     <strong className="text-foreground">
-                      Notifikasi Dinamis:
+                      Sistem Notifikasi Dinamis:
                     </strong>{" "}
+                    Mengganti notifikasi statis dengan sistem berbasis event
+                    yang mendeteksi setiap aktivitas (Tambah/Ubah/Hapus) di
+                    seluruh modul secara instan.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Penyempurnaan Zustand Store:
+                    </strong>{" "}
+                    Injeksi <i>Action Payload</i> otomatis pada Store untuk
+                    mencatat riwayat aktivitas tanpa perlu pemanggilan fungsi
+                    ganda.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      UI/UX Offcanvas Notifikasi:
+                    </strong>{" "}
+                    Visualisasi notifikasi yang lebih kaya dengan indikator
+                    status warna-warni (Success, Info, Warning) berdasarkan tipe
+                    aktivitas.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 4.0.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <GitCommitHorizontal className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 4.0.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Arsitektur Global Store
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    <strong className="text-foreground">
+                      Migrasi Zustand Global Store:
+                    </strong>{" "}
+                    Mengganti <i>local state</i> yang tersebar menjadi satu
+                    penyimpanan terpusat (<code>useAppStore</code>),
+                    meminimalisir <i>prop-drilling</i> dan meningkatkan
+                    efisiensi memori.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Kalkulasi Data Dinamis (Derived State):
+                    </strong>{" "}
+                    Data pada halaman Klien, Dashboard, dan Reports kini
+                    dihitung secara <i>real-time</i> berdasarkan riwayat
+                    Invoices dan Expenses, bukan lagi data statis.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Persistent Storage:
+                    </strong>{" "}
+                    Integrasi <i>middleware persist</i> dari Zustand untuk
+                    sinkronisasi <i>local storage</i> yang otomatis dan aman.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Strict TypeScript Interface:
+                    </strong>{" "}
+                    Penyempurnaan tipe data untuk mencegah <i>runtime error</i>{" "}
+                    dan menjamin konsistensi payload data pada seluruh modul.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 3.2.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <GitCommitHorizontal className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 3.2.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    State Hook & Reusable Components
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    Pengenalan <code>useSettings</code> custom hook untuk
+                    sinkronisasi data profil dan preferensi.
+                  </li>
+                  <li>
+                    Implementasi <code>&lt;CustomPagination /&gt;</code>{" "}
+                    terpusat di seluruh modul data tabular.
+                  </li>
+                  <li>
+                    Optimalisasi <i>event listener</i> (
+                    <code>window.dispatchEvent</code>) untuk reaktivitas UI
+                    instan.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 3.1.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 3.1.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Notifikasi & Keamanan
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
                     Pelacakan otomatis untuk Invoice Jatuh Tempo dan Pengeluaran
                     Pending via <i>Offcanvas Panel</i>.
                   </li>
                   <li>
-                    <strong className="text-foreground">
-                      Keamanan Kredensial:
-                    </strong>{" "}
                     Sistem pembaruan kata sandi aktif yang tersinkronisasi
-                    langsung dengan database virtual.
+                    langsung dengan database virtual lokal.
                   </li>
                   <li>
-                    <strong className="text-foreground">
-                      Kelengkapan Bisnis:
-                    </strong>{" "}
                     Penambahan field NPWP dan Website pada pengaturan identitas
-                    entitas perusahaan.
+                    perusahaan.
                   </li>
                 </ul>
               </div>
@@ -324,7 +452,7 @@ export default function AboutPage() {
                 <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
                   <li>
                     Implementasi <code>useMemo</code> secara menyeluruh untuk
-                    optimasi performa *render*.
+                    optimasi performa <i>render</i>.
                   </li>
                   <li>
                     Peluncuran modul pencatatan Pengeluaran (Expense Tracking).
@@ -357,7 +485,8 @@ export default function AboutPage() {
                     preferensi.
                   </li>
                   <li>
-                    Dukungan Multi-Mata Uang (IDR & USD) secara *real-time*.
+                    Dukungan Multi-Mata Uang (IDR & USD) secara <i>real-time</i>
+                    .
                   </li>
                 </ul>
               </div>
@@ -427,14 +556,14 @@ export default function AboutPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                  Ekspor PDF & Excel, Modul Pengaturan Sistem, Konversi Mata
-                  Uang, dan Autentikasi.
+                  Ekspor PDF & Excel, Pengaturan Sistem, Konversi Mata Uang, dan
+                  Autentikasi.
                 </p>
               </div>
 
-              <div className="p-4 border rounded-xl bg-card relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                <div className="flex items-center justify-between mb-3 pl-2">
+              {/* FASE 3 DIJADIKAN SELESAI */}
+              <div className="p-4 border rounded-xl bg-card">
+                <div className="flex items-center justify-between mb-3">
                   <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-0 shadow-none">
                     Fase 3
                   </Badge>
@@ -442,12 +571,13 @@ export default function AboutPage() {
                     <CheckCircle2 className="w-3 h-3" /> Selesai
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed font-medium pl-2">
-                  Pencatatan Expense, Manajemen Hak Akses Tim, dan Optimasi
-                  Rendering (useMemo) secara menyeluruh.
+                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                  Pencatatan Expense, Optimasi Rendering, Migrasi Global Store
+                  (Zustand), dan Data Dinamis.
                 </p>
               </div>
 
+              {/* FASE 4 (BARU) MENJADI PROSES */}
               <div className="p-4 border border-dashed rounded-xl bg-muted/10 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary transition-all group-hover:w-1.5"></div>
                 <div className="flex items-center justify-between mb-3 pl-2">

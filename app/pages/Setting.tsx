@@ -1,4 +1,10 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
+import type { UserType } from "~/types/index";
+
+// SHADCN UI COMPONENTS
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -11,20 +17,13 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
-import { toast } from "sonner";
-import { type User } from "~/data/invoices";
 
-// IMPORT USETHEME UNTUK MENGUBAH TEMA SECARA LANGSUNG
+// HOOKS GLOBAL ZUSTAND
 import { useTheme } from "~/components/theme-provider";
+import { useAppStore } from "~/store/useAppStore"; // Pastikan path ini sesuai
 
+// ICONS
 import {
   UserCircle,
   Building,
@@ -44,29 +43,51 @@ import {
   Globe,
   FileDigit,
   Lock,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 
-const emptySettings = {
-  profil: { nama: "", email: "", telepon: "", avatar: "" },
-  perusahaan: {
-    nama: "",
-    alamat: "",
-    telepon: "",
-    email: "",
-    npwp: "",
-    website: "",
-  },
-  rekening: { namaBank: "", nomor: "", pemilik: "" },
-  preferensi: { tema: "system", mataUang: "IDR", notifikasiEmail: true },
-};
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 
-export default function SettingsPage() {
+import { cn } from "~/lib/utils";
+
+export default function SettingPage() {
   const { theme, setTheme } = useTheme();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [openComboboxTema, setOpenComboboxTema] = useState(false);
+  const [openComboboxMataUang, setOpenComboboxMataUang] = useState(false);
 
-  const [profil, setProfil] = useState(emptySettings.profil);
-  const [perusahaan, setPerusahaan] = useState(emptySettings.perusahaan);
-  const [rekening, setRekening] = useState(emptySettings.rekening);
-  const [preferensi, setPreferensi] = useState(emptySettings.preferensi);
+  // ==========================================
+  // MENGAMBIL DATA & ACTION DARI ZUSTAND STORE
+  // ==========================================
+  const {
+    profil: globalProfil,
+    infoBisnis: globalBisnis,
+    rekening: globalRekening,
+    preferensi: globalPref,
+    setProfil: setGlobalProfil,
+    setInfoBisnis: setGlobalBisnis,
+    setRekening: setGlobalRekening,
+    setPreferensi: setGlobalPref,
+  } = useAppStore();
+
+  // ==========================================
+  // STATE LOKAL UNTUK FORMULIR
+  // ==========================================
+  const [profil, setProfilLokal] = useState(globalProfil);
+  const [infoBisnis, setInfoBisnisLokal] = useState(globalBisnis);
+  const [rekening, setRekeningLokal] = useState(globalRekening);
+  const [preferensi, setPreferensiLokal] = useState(globalPref);
 
   const [passwordForm, setPasswordForm] = useState({
     saatIni: "",
@@ -75,87 +96,115 @@ export default function SettingsPage() {
   });
 
   const [activeTab, setActiveTab] = useState("profil");
-  const [isLoaded, setIsLoaded] = useState(false);
 
+  // Sinkronisasi data global ke lokal saat pertama kali dimuat atau di-refresh
   useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    const currentSettings = savedSettings
-      ? JSON.parse(savedSettings)
-      : JSON.parse(JSON.stringify(emptySettings));
+    setProfilLokal(globalProfil);
+    setInfoBisnisLokal(globalBisnis);
+    setRekeningLokal(globalRekening);
+    setPreferensiLokal(globalPref);
+  }, [globalProfil, globalBisnis, globalRekening, globalPref]);
 
-    const activeUserStr = localStorage.getItem("currentUser");
+  // ==========================================
+  // LOGIKA UPLOAD FOTO PROFIL (Kompresi Base64)
+  // ==========================================
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
 
-    if (activeUserStr) {
-      const activeUser = JSON.parse(activeUserStr);
-      currentSettings.profil.nama =
-        activeUser.name || currentSettings.profil.nama;
-      currentSettings.profil.email =
-        activeUser.email || currentSettings.profil.email;
-      currentSettings.profil.telepon =
-        activeUser.phone || currentSettings.profil.telepon;
+      reader.onloadend = () => {
+        const img = new Image();
+        img.src = reader.result as string;
+
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 256;
+          const MAX_HEIGHT = 256;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setProfilLokal({ ...profil, avatar: compressedBase64 });
+
+          toast.success("Foto profil berhasil dikompresi & dipilih!", {
+            description: "Jangan lupa tekan 'Simpan Profil' untuk menerapkan.",
+          });
+        };
+      };
+      reader.readAsDataURL(file);
     }
+  };
 
-    currentSettings.preferensi.tema = theme || currentSettings.preferensi.tema;
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
-    setProfil(currentSettings.profil);
-    setPerusahaan({
-      ...emptySettings.perusahaan,
-      ...currentSettings.perusahaan,
-    });
-    setRekening(currentSettings.rekening);
-    setPreferensi(currentSettings.preferensi);
-    setIsLoaded(true);
-  }, [theme]);
-
+  // ==========================================
+  // LOGIKA PENYIMPANAN DATA KE ZUSTAND
+  // ==========================================
   const handleSimpan = (kategori: string, overrideData?: any) => {
-    const updatedSettings = {
-      profil,
-      perusahaan,
-      rekening,
-      preferensi: overrideData?.preferensi || preferensi,
-    };
-
-    localStorage.setItem("adminSettings", JSON.stringify(updatedSettings));
-
+    // 1. Simpan Profil Personal
     if (kategori === "Profil Personal") {
+      setGlobalProfil(profil);
+
+      // (Opsional) Update sesi lokal khusus autentikasi agar UI shell tidak perlu ditarik ulang semua
       const savedUserStr = localStorage.getItem("currentUser");
       if (savedUserStr) {
         const parsedUser = JSON.parse(savedUserStr);
         parsedUser.name = profil.nama;
         parsedUser.email = profil.email;
-        parsedUser.phone = profil.telepon;
-
+        parsedUser.avatar = profil.avatar;
         localStorage.setItem("currentUser", JSON.stringify(parsedUser));
 
-        const usersDB: User[] = JSON.parse(
-          localStorage.getItem("users_db") || "[]",
-        );
-        const updatedUsersDB = usersDB.map((user) => {
-          if (user.id === parsedUser.id) {
-            return {
-              ...user,
-              name: profil.nama,
-              email: profil.email,
-              phone: profil.telepon,
-            };
-          }
-          return user;
-        });
-        localStorage.setItem("users_db", JSON.stringify(updatedUsersDB));
+        // Trigger event untuk NavUser dan Layout
         window.dispatchEvent(new Event("user-updated"));
       }
     }
 
+    // 2. Simpan Entitas Bisnis
+    if (kategori === "Detail Bisnis") setGlobalBisnis(infoBisnis);
+
+    // 3. Simpan Rekening Bank
+    if (kategori === "Rekening Bank") setGlobalRekening(rekening);
+
+    // 4. Simpan Preferensi (Tema, Mata Uang, Notifikasi)
+    if (
+      kategori.includes("Tema") ||
+      kategori.includes("Mata Uang") ||
+      kategori.includes("Notifikasi")
+    ) {
+      setGlobalPref(overrideData?.preferensi || preferensi);
+    }
+
     toast.success(`Pengaturan ${kategori} berhasil diperbarui.`, {
-      description: "Perubahan telah disimpan ke dalam sistem.",
+      description: "Perubahan telah disimpan otomatis oleh sistem.",
     });
   };
 
   // ==========================================
-  // LOGIKA GANTI PASSWORD YANG BERFUNGSI AKTIF
+  // LOGIKA GANTI KATA SANDI
   // ==========================================
   const handleGantiPassword = () => {
-    // 1. Validasi Input Kosong
     if (
       !passwordForm.saatIni ||
       !passwordForm.baru ||
@@ -164,55 +213,38 @@ export default function SettingsPage() {
       toast.error("Gagal! Harap isi seluruh kolom kata sandi.");
       return;
     }
-
-    // 2. Validasi Konfirmasi Sandi Baru
     if (passwordForm.baru !== passwordForm.konfirmasi) {
       toast.error("Gagal! Konfirmasi kata sandi baru tidak cocok.");
       return;
     }
-
-    // 3. Validasi Panjang Karakter Minimum
     if (passwordForm.baru.length < 8) {
       toast.error("Gagal! Kata sandi baru harus minimal 8 karakter.");
       return;
     }
 
-    // 4. Ambil data sesi & database virtual
+    // Untuk autentikasi yang tersimpan di localStorage (jika Anda masih menggunakan users_db lokal)
     const activeUserStr = localStorage.getItem("currentUser");
     const usersDBStr = localStorage.getItem("users_db");
 
     if (activeUserStr && usersDBStr) {
       const activeUser = JSON.parse(activeUserStr);
-      const usersDB: User[] = JSON.parse(usersDBStr);
-
-      // Cari indeks akun yang sedang login di database
+      const usersDB: UserType[] = JSON.parse(usersDBStr);
       const userIndex = usersDB.findIndex((u) => u.id === activeUser.id);
 
       if (userIndex !== -1) {
-        // 5. Validasi: Cek apakah input kata sandi lama SESUAI dengan database
-        // (Asumsi tipe User memiliki properti 'password', bisa di-cast sbg 'any' jika error TS)
-        if ((usersDB[userIndex] as any).password !== passwordForm.saatIni) {
+        if (usersDB[userIndex].password !== passwordForm.saatIni) {
           toast.error(
             "Gagal! Kata sandi saat ini (lama) yang Anda masukkan salah.",
           );
           return;
         }
-
-        // 6. Eksekusi: Timpa dengan kata sandi baru dan simpan ke database
-        (usersDB[userIndex] as any).password = passwordForm.baru;
+        usersDB[userIndex].password = passwordForm.baru;
         localStorage.setItem("users_db", JSON.stringify(usersDB));
-
-        toast.success("Kata sandi berhasil diperbarui!", {
-          description: "Gunakan kata sandi baru Anda untuk login selanjutnya.",
-        });
-
-        // Kosongkan form setelah sukses
+        toast.success("Kata sandi berhasil diperbarui!");
         setPasswordForm({ saatIni: "", baru: "", konfirmasi: "" });
-      } else {
-        toast.error("Gagal! Akun Anda tidak ditemukan di database.");
       }
     } else {
-      toast.error("Sesi tidak valid, silakan login ulang.");
+      toast.error("Data user tidak ditemukan. Silakan login kembali.");
     }
   };
 
@@ -224,10 +256,8 @@ export default function SettingsPage() {
     { id: "preferensi", label: "Sistem & Tema", icon: Palette },
   ];
 
-  if (!isLoaded) return null;
-
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4 xl:px-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-6xl mx-auto py-8 px-4 xl:px-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       <div className="space-y-2 pb-6 border-b border-border/50 mt-2">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
           Pengaturan Sistem
@@ -266,9 +296,7 @@ export default function SettingsPage() {
         </aside>
 
         <main className="flex-1 max-w-3xl min-h-[500px]">
-          {/* ==========================================
-              TAB: PROFIL PERSONAL
-          ========================================== */}
+          {/* TAB: PROFIL PERSONAL */}
           {activeTab === "profil" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
@@ -277,43 +305,70 @@ export default function SettingsPage() {
                     <UserCircle className="w-5 h-5 text-primary" />
                     Informasi Personal
                   </CardTitle>
-                  <CardDescription>
-                    Identitas utama Anda sebagai pengelola sistem.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                  <div className="flex items-center gap-6">
-                    <div className="relative">
-                      <div className="w-20 h-20 bg-gradient-to-tr from-primary/20 to-primary/5 text-primary rounded-2xl flex items-center justify-center text-3xl font-bold border-2 border-background ring-2 ring-primary/20 shadow-sm">
-                        {profil.nama
-                          ? profil.nama.charAt(0).toUpperCase()
-                          : "U"}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                    <div className="relative shrink-0">
+                      <div className="w-24 h-24 bg-gradient-to-tr from-primary/20 to-primary/5 text-primary rounded-3xl flex items-center justify-center text-4xl font-extrabold border-4 border-background ring-2 ring-primary/20 shadow-sm overflow-hidden">
+                        {profil.avatar ? (
+                          <img
+                            src={profil.avatar}
+                            alt="Foto Profil"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : profil.nama ? (
+                          profil.nama.charAt(0).toUpperCase()
+                        ) : (
+                          "U"
+                        )}
                       </div>
-                      <button className="absolute -bottom-2 -right-2 p-2 bg-background border rounded-xl text-muted-foreground hover:text-primary shadow-sm transition-colors cursor-pointer">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        accept="image/jpeg, image/png, image/webp"
+                        className="hidden"
+                      />
+                      <button
+                        onClick={triggerFileInput}
+                        className="absolute -bottom-2 -right-2 p-2.5 bg-background border rounded-xl text-muted-foreground hover:text-primary shadow-md hover:shadow-lg transition-all cursor-pointer"
+                      >
                         <Camera className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="space-y-1">
-                      <h3 className="font-semibold text-sm">Foto Profil</h3>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Disarankan menggunakan format JPG atau PNG berukuran
-                        1:1.
+                    <div className="space-y-1.5 flex-1">
+                      <h3 className="font-semibold text-sm">Visual Pengguna</h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed max-w-sm">
+                        Format didukung: JPG, PNG, atau WEBP. Maksimal 2MB.
                       </p>
+                      {profil.avatar && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-rose-500 hover:bg-rose-50 mt-1"
+                          onClick={() =>
+                            setProfilLokal({ ...profil, avatar: "" })
+                          }
+                        >
+                          Hapus Foto
+                        </Button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 pt-2">
                     <div className="space-y-2">
                       <Label htmlFor="nama" className="font-semibold">
                         Nama Lengkap
                       </Label>
                       <Input
                         id="nama"
+                        placeholder="Masukkan nama lengkap Anda..."
                         value={profil.nama}
                         onChange={(e) =>
-                          setProfil({ ...profil, nama: e.target.value })
+                          setProfilLokal({ ...profil, nama: e.target.value })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -328,11 +383,12 @@ export default function SettingsPage() {
                         <Input
                           id="email"
                           type="email"
+                          placeholder="contoh@email.com"
                           value={profil.email}
                           onChange={(e) =>
-                            setProfil({ ...profil, email: e.target.value })
+                            setProfilLokal({ ...profil, email: e.target.value })
                           }
-                          className="rounded-xl h-10 bg-muted/20"
+                          className="rounded-xl h-10 bg-background border-border/60"
                         />
                       </div>
                       <div className="space-y-2">
@@ -345,24 +401,24 @@ export default function SettingsPage() {
                         </Label>
                         <Input
                           id="telepon"
-                          placeholder="Belum ditambahkan"
+                          placeholder="0812-XXXX-XXXX"
                           value={profil.telepon}
                           onChange={(e) =>
-                            setProfil({ ...profil, telepon: e.target.value })
+                            setProfilLokal({
+                              ...profil,
+                              telepon: e.target.value,
+                            })
                           }
-                          className="rounded-xl h-10 bg-muted/20"
+                          className="rounded-xl h-10 bg-background border-border/60"
                         />
                       </div>
                     </div>
                   </div>
                 </CardContent>
-                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground hidden sm:block">
-                    Pastikan email aktif untuk keperluan pemulihan akun.
-                  </p>
+                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-end">
                   <Button
                     onClick={() => handleSimpan("Profil Personal")}
-                    className="gap-2 rounded-xl ml-auto font-bold shadow-md"
+                    className="gap-2 rounded-xl font-bold shadow-md h-10"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Simpan Profil
                   </Button>
@@ -371,21 +427,15 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ==========================================
-              TAB: IDENTITAS BISNIS
-          ========================================== */}
+          {/* TAB: IDENTITAS BISNIS */}
           {activeTab === "bisnis" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-5">
                   <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Building className="w-5 h-5 text-amber-500" />
-                    Detail Perusahaan
+                    <Building className="w-5 h-5 text-amber-500" /> Detail
+                    Perusahaan
                   </CardTitle>
-                  <CardDescription>
-                    Informasi ini akan tercetak otomatis sebagai header dan
-                    footer pada PDF invoice Anda.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -395,15 +445,17 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="namaPerusahaan"
-                        placeholder="Cth: PT Inovasi Maju"
-                        value={perusahaan.nama}
+                        placeholder="PT. Nama Perusahaan Anda"
+                        value={infoBisnis.nama}
                         onChange={(e) =>
-                          setPerusahaan({ ...perusahaan, nama: e.target.value })
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
+                            nama: e.target.value,
+                          })
                         }
-                        className="rounded-xl h-10 bg-muted/20 font-semibold"
+                        className="rounded-xl h-10 bg-background border-border/60 font-semibold"
                       />
                     </div>
-
                     <div className="space-y-2">
                       <Label
                         htmlFor="npwp"
@@ -414,12 +466,15 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="npwp"
-                        placeholder="Format: 12.345.678.9-012.000"
-                        value={perusahaan.npwp}
+                        placeholder="00.000.000.0-000.000"
+                        value={infoBisnis.npwp}
                         onChange={(e) =>
-                          setPerusahaan({ ...perusahaan, npwp: e.target.value })
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
+                            npwp: e.target.value,
+                          })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                     <div className="space-y-2">
@@ -432,15 +487,15 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="webBisnis"
-                        placeholder="www.domainanda.com"
-                        value={perusahaan.website}
+                        placeholder="https://www.websiteanda.com"
+                        value={infoBisnis.website}
                         onChange={(e) =>
-                          setPerusahaan({
-                            ...perusahaan,
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
                             website: e.target.value,
                           })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                     <div className="space-y-2">
@@ -454,15 +509,15 @@ export default function SettingsPage() {
                       <Input
                         id="emailBisnis"
                         type="email"
-                        placeholder="hello@domainanda.com"
-                        value={perusahaan.email}
+                        placeholder="finance@perusahaan.com"
+                        value={infoBisnis.email}
                         onChange={(e) =>
-                          setPerusahaan({
-                            ...perusahaan,
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
                             email: e.target.value,
                           })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                     <div className="space-y-2">
@@ -475,18 +530,17 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="telpBisnis"
-                        placeholder="(021) 1234567"
-                        value={perusahaan.telepon}
+                        placeholder="021-XXXXXXXX"
+                        value={infoBisnis.telepon}
                         onChange={(e) =>
-                          setPerusahaan({
-                            ...perusahaan,
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
                             telepon: e.target.value,
                           })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
-
                     <div className="space-y-2 sm:col-span-2">
                       <Label
                         htmlFor="alamat"
@@ -497,28 +551,24 @@ export default function SettingsPage() {
                       </Label>
                       <Textarea
                         id="alamat"
-                        placeholder="Masukkan alamat fisik kantor pusat operasi bisnis Anda..."
                         rows={3}
-                        value={perusahaan.alamat}
+                        placeholder="Masukkan alamat domisili operasional bisnis..."
+                        value={infoBisnis.alamat}
                         onChange={(e) =>
-                          setPerusahaan({
-                            ...perusahaan,
+                          setInfoBisnisLokal({
+                            ...infoBisnis,
                             alamat: e.target.value,
                           })
                         }
-                        className="rounded-xl resize-none bg-muted/20"
+                        className="rounded-xl resize-none bg-background border-border/60"
                       />
                     </div>
                   </div>
                 </CardContent>
-                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground hidden sm:block">
-                    Kelengkapan data ini dapat meningkatkan tingkat kepercayaan
-                    klien.
-                  </p>
+                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-end">
                   <Button
                     onClick={() => handleSimpan("Detail Bisnis")}
-                    className="gap-2 rounded-xl ml-auto font-bold shadow-md"
+                    className="gap-2 rounded-xl font-bold shadow-md h-10"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Simpan Entitas
                   </Button>
@@ -527,38 +577,31 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ==========================================
-              TAB: REKENING BANK
-          ========================================== */}
+          {/* TAB: REKENING BANK */}
           {activeTab === "rekening" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-5">
                   <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Landmark className="w-5 h-5 text-emerald-500" />
-                    Rekening Penagihan
+                    <Landmark className="w-5 h-5 text-emerald-500" /> Rekening
+                    Penagihan
                   </CardTitle>
-                  <CardDescription>
-                    Tujuan transfer pembayaran yang ditujukan untuk klien Anda.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-6">
-                  <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-2">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-emerald-500/20 rounded-xl shrink-0">
-                        <CreditCard className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                          {rekening.namaBank || "NAMA BANK"}
-                        </p>
-                        <p className="text-xl text-emerald-800 dark:text-emerald-400 font-mono mt-1 font-bold">
-                          {rekening.nomor || "XXXX-XXXX-XXXX"}
-                        </p>
-                        <p className="text-xs font-semibold text-emerald-600/80 dark:text-emerald-400/80 mt-1 uppercase">
-                          A.N {rekening.pemilik || "NAMA PEMILIK"}
-                        </p>
-                      </div>
+                  <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-2 flex items-center gap-4">
+                    <div className="p-3 bg-emerald-500/20 rounded-xl shrink-0">
+                      <CreditCard className="w-8 h-8 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase text-emerald-700">
+                        {rekening.namaBank || "NAMA BANK"}
+                      </p>
+                      <p className="text-xl text-emerald-800 font-mono mt-1 font-bold">
+                        {rekening.nomor || "XXXX-XXXX-XXXX"}
+                      </p>
+                      <p className="text-xs font-semibold text-emerald-600/80 mt-1 uppercase">
+                        A.N {rekening.pemilik || "NAMA PEMILIK"}
+                      </p>
                     </div>
                   </div>
 
@@ -569,12 +612,15 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="namaBank"
-                        placeholder="Cth: BCA / Mandiri / GoPay"
+                        placeholder="BCA / Mandiri / GoPay..."
                         value={rekening.namaBank}
                         onChange={(e) =>
-                          setRekening({ ...rekening, namaBank: e.target.value })
+                          setRekeningLokal({
+                            ...rekening,
+                            namaBank: e.target.value,
+                          })
                         }
-                        className="rounded-xl h-10 bg-muted/20 uppercase"
+                        className="rounded-xl h-10 bg-background border-border/60 uppercase"
                       />
                     </div>
                     <div className="space-y-2">
@@ -583,37 +629,40 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="nomorRekening"
-                        placeholder="Masukkan digit nomor"
+                        placeholder="1234567890"
                         value={rekening.nomor}
                         onChange={(e) =>
-                          setRekening({ ...rekening, nomor: e.target.value })
+                          setRekeningLokal({
+                            ...rekening,
+                            nomor: e.target.value,
+                          })
                         }
-                        className="rounded-xl h-10 bg-muted/20 font-mono text-base"
+                        className="rounded-xl h-10 bg-background border-border/60 font-mono"
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-5">
                     <Label htmlFor="pemilikRekening" className="font-semibold">
                       Nama Pemilik Rekening
                     </Label>
                     <Input
                       id="pemilikRekening"
-                      placeholder="Atas nama sesuai buku tabungan..."
+                      placeholder="Atas Nama (A.N)..."
                       value={rekening.pemilik}
                       onChange={(e) =>
-                        setRekening({ ...rekening, pemilik: e.target.value })
+                        setRekeningLokal({
+                          ...rekening,
+                          pemilik: e.target.value,
+                        })
                       }
-                      className="rounded-xl h-10 bg-muted/20"
+                      className="rounded-xl h-10 bg-background border-border/60"
                     />
                   </div>
                 </CardContent>
-                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground hidden sm:block">
-                    Pastikan nomor rekening valid sebelum membuat invoice.
-                  </p>
+                <CardFooter className="border-t bg-muted/10 px-6 py-4 flex items-center justify-end">
                   <Button
                     onClick={() => handleSimpan("Rekening Bank")}
-                    className="gap-2 rounded-xl ml-auto font-bold shadow-md"
+                    className="gap-2 rounded-xl font-bold shadow-md h-10"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Simpan Rekening
                   </Button>
@@ -622,20 +671,15 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ==========================================
-              TAB: KEAMANAN AKUN
-          ========================================== */}
+          {/* TAB: KEAMANAN AKUN */}
           {activeTab === "keamanan" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-5">
                   <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-red-500" />
-                    Keamanan & Kata Sandi
+                    <ShieldAlert className="w-5 h-5 text-red-500" /> Keamanan &
+                    Kata Sandi
                   </CardTitle>
-                  <CardDescription>
-                    Perbarui kredensial Anda untuk menjaga keamanan akses.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-6">
                   <div className="space-y-2">
@@ -657,10 +701,10 @@ export default function SettingsPage() {
                           saatIni: e.target.value,
                         })
                       }
-                      className="rounded-xl h-10 bg-muted/20"
+                      className="rounded-xl h-10 bg-background border-border/60"
                     />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-border/50">
                     <div className="space-y-2">
                       <Label htmlFor="passBaru" className="font-semibold">
                         Kata Sandi Baru
@@ -668,7 +712,7 @@ export default function SettingsPage() {
                       <Input
                         id="passBaru"
                         type="password"
-                        placeholder="Minimal 8 karakter"
+                        placeholder="••••••••"
                         value={passwordForm.baru}
                         onChange={(e) =>
                           setPasswordForm({
@@ -676,7 +720,7 @@ export default function SettingsPage() {
                             baru: e.target.value,
                           })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                     <div className="space-y-2">
@@ -686,7 +730,7 @@ export default function SettingsPage() {
                       <Input
                         id="passKonfirm"
                         type="password"
-                        placeholder="Ulangi kata sandi baru"
+                        placeholder="••••••••"
                         value={passwordForm.konfirmasi}
                         onChange={(e) =>
                           setPasswordForm({
@@ -694,7 +738,7 @@ export default function SettingsPage() {
                             konfirmasi: e.target.value,
                           })
                         }
-                        className="rounded-xl h-10 bg-muted/20"
+                        className="rounded-xl h-10 bg-background border-border/60"
                       />
                     </div>
                   </div>
@@ -702,7 +746,7 @@ export default function SettingsPage() {
                 <CardFooter className="border-t bg-muted/10 px-6 py-4">
                   <Button
                     onClick={handleGantiPassword}
-                    className="gap-2 rounded-xl w-full sm:w-auto font-bold shadow-md bg-foreground text-background hover:bg-foreground/90"
+                    className="gap-2 rounded-xl w-full sm:w-auto font-bold shadow-md h-10 bg-foreground text-background hover:bg-foreground/90"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Perbarui Kata Sandi
                   </Button>
@@ -711,110 +755,207 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ==========================================
-              TAB: PREFERENSI
-          ========================================== */}
+          {/* TAB: PREFERENSI */}
           {activeTab === "preferensi" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-5">
                   <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Palette className="w-5 h-5 text-indigo-500" />
-                    Antarmuka & Regional
+                    <Palette className="w-5 h-5 text-indigo-500" /> Antarmuka &
+                    Regional
                   </CardTitle>
-                  <CardDescription>
-                    Sesuaikan lingkungan kerja aplikasi sesuai gaya Anda.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                  {/* Tema */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <Label className="text-base font-semibold">
                         Tema Aplikasi
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Pilih skema warna yang paling nyaman di mata.
+                        Pilih skema warna yang nyaman.
                       </p>
                     </div>
-                    <Select
-                      value={preferensi.tema}
-                      onValueChange={(val) => {
-                        const newPreferensi = { ...preferensi, tema: val };
-                        setPreferensi(newPreferensi);
-                        setTheme(val as "light" | "dark" | "system");
-                        handleSimpan("Tema Antarmuka", {
-                          preferensi: newPreferensi,
-                        });
-                      }}
+                    <Popover
+                      open={openComboboxTema}
+                      onOpenChange={setOpenComboboxTema}
                     >
-                      <SelectTrigger className="w-full sm:w-[220px] rounded-xl h-10">
-                        <SelectValue placeholder="Pilih Tema" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="light">
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openComboboxTema}
+                          className="w-full sm:w-[220px] justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                        >
                           <div className="flex items-center gap-2">
-                            <Sun className="w-4 h-4" /> Terang
+                            {preferensi.tema === "light" && (
+                              <>
+                                <Sun className="w-4 h-4 text-amber-500" />{" "}
+                                Terang
+                              </>
+                            )}
+                            {preferensi.tema === "dark" && (
+                              <>
+                                <Moon className="w-4 h-4 text-blue-500" /> Gelap
+                              </>
+                            )}
+                            {preferensi.tema === "system" && (
+                              <>
+                                <Monitor className="w-4 h-4 text-muted-foreground" />{" "}
+                                Ikuti Sistem
+                              </>
+                            )}
                           </div>
-                        </SelectItem>
-                        <SelectItem value="dark">
-                          <div className="flex items-center gap-2">
-                            <Moon className="w-4 h-4" /> Gelap
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="system">
-                          <div className="flex items-center gap-2">
-                            <Monitor className="w-4 h-4" /> Ikuti Sistem
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-[220px] p-0 rounded-xl shadow-lg border-border/60"
+                        align="end"
+                      >
+                        <Command>
+                          <CommandList>
+                            <CommandGroup>
+                              {[
+                                {
+                                  value: "light",
+                                  label: "Terang",
+                                  icon: Sun,
+                                  color: "text-amber-500",
+                                },
+                                {
+                                  value: "dark",
+                                  label: "Gelap",
+                                  icon: Moon,
+                                  color: "text-blue-500",
+                                },
+                                {
+                                  value: "system",
+                                  label: "Ikuti Sistem",
+                                  icon: Monitor,
+                                  color: "text-muted-foreground",
+                                },
+                              ].map((item) => (
+                                <CommandItem
+                                  key={item.value}
+                                  onSelect={() => {
+                                    const newPreferensi = {
+                                      ...preferensi,
+                                      tema: item.value,
+                                    };
+                                    setPreferensiLokal(newPreferensi);
+                                    setTheme(
+                                      item.value as "light" | "dark" | "system",
+                                    );
+                                    handleSimpan("Tema Antarmuka", {
+                                      preferensi: newPreferensi,
+                                    });
+                                    setOpenComboboxTema(false);
+                                  }}
+                                  className="rounded-lg cursor-pointer my-0.5 font-medium"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 text-primary shrink-0",
+                                      preferensi.tema === item.value
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  <item.icon
+                                    className={cn("mr-2 h-4 w-4", item.color)}
+                                  />
+                                  {item.label}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div className="shrink-0 bg-border/50 h-[1px] w-full" />
 
-                  {/* Mata Uang */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <Label className="text-base font-semibold">
                         Mata Uang Basis
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Format penulisan angka default (Rp / $).
+                        Format penulisan angka default.
                       </p>
                     </div>
-                    <Select
-                      value={preferensi.mataUang}
-                      onValueChange={(val) => {
-                        const newPreferensi = { ...preferensi, mataUang: val };
-                        setPreferensi(newPreferensi);
-                        handleSimpan("Mata Uang", {
-                          preferensi: newPreferensi,
-                        });
-                      }}
+                    <Popover
+                      open={openComboboxMataUang}
+                      onOpenChange={setOpenComboboxMataUang}
                     >
-                      <SelectTrigger className="w-full sm:w-[220px] rounded-xl h-10 font-mono font-medium">
-                        <SelectValue placeholder="Pilih Mata Uang" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="IDR">IDR - Rupiah</SelectItem>
-                        <SelectItem value="USD">USD - Dolar AS</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openComboboxMataUang}
+                          className="w-full sm:w-[220px] justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all font-mono"
+                        >
+                          {preferensi.mataUang === "IDR"
+                            ? "IDR - Rupiah"
+                            : "USD - Dolar AS"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-[220px] p-0 rounded-xl shadow-lg border-border/60"
+                        align="end"
+                      >
+                        <Command>
+                          <CommandList>
+                            <CommandGroup>
+                              {[
+                                { value: "IDR", label: "IDR - Rupiah" },
+                                { value: "USD", label: "USD - Dolar AS" },
+                              ].map((item) => (
+                                <CommandItem
+                                  key={item.value}
+                                  onSelect={() => {
+                                    const newPreferensi = {
+                                      ...preferensi,
+                                      mataUang: item.value,
+                                    };
+                                    setPreferensiLokal(newPreferensi);
+                                    handleSimpan("Mata Uang", {
+                                      preferensi: newPreferensi,
+                                    });
+                                    setOpenComboboxMataUang(false);
+                                  }}
+                                  className="rounded-lg cursor-pointer my-0.5 font-medium font-mono"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 text-primary shrink-0",
+                                      preferensi.mataUang === item.value
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  {item.label}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Card Notifikasi */}
               <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-5">
                   <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-rose-500" />
-                    Notifikasi Sistem
+                    <Bell className="w-5 h-5 text-rose-500" /> Notifikasi Sistem
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="flex flex-row items-center justify-between rounded-xl border border-border/50 p-5 bg-muted/10 hover:bg-muted/20 transition-colors">
+                  <div className="flex flex-row items-center justify-between rounded-xl border border-border/50 p-5 bg-muted/10">
                     <div className="space-y-1 pr-4">
                       <Label
                         className="text-base font-semibold cursor-pointer"
@@ -822,9 +963,9 @@ export default function SettingsPage() {
                       >
                         Peringatan Status Lunas
                       </Label>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground">
                         Terima pemberitahuan email otomatis ketika status
-                        invoice diperbarui menjadi lunas oleh klien.
+                        invoice diperbarui.
                       </p>
                     </div>
                     <Switch
@@ -835,7 +976,7 @@ export default function SettingsPage() {
                           ...preferensi,
                           notifikasiEmail: checked,
                         };
-                        setPreferensi(newPreferensi);
+                        setPreferensiLokal(newPreferensi);
                         handleSimpan(
                           checked
                             ? "Notifikasi Diaktifkan"

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
@@ -40,21 +40,20 @@ import { Checkbox } from "~/components/ui/checkbox";
 // ==========================================
 import {
   Activity,
-  DollarSign,
-  TrendingUp,
   ArrowUpRight,
   Download,
   Clock,
   Briefcase,
-  PieChart as PieIcon,
   CheckCircle2,
   Calendar as CalendarIcon,
   FileSpreadsheet,
-  Mail,
   FileText,
   LayoutDashboard,
   SlidersHorizontal,
   Loader2,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 
 import {
@@ -79,13 +78,26 @@ import {
 import * as XLSX from "xlsx";
 import type { DateRange } from "react-day-picker";
 
-// IMPORT DATA
-import { dataAwal, type Invoice } from "~/data/invoices";
+// ==========================================
+// IMPORT DATA GLOBAL & UTILITIES
+// ==========================================
+import { useAppStore } from "~/store/useAppStore";
+import type { Invoice } from "~/types/index";
+import {
+  parseCurrencyToNumber,
+  formatCurrency,
+  convertAndFormatCurrency,
+  EXCHANGE_RATE_USD,
+} from "~/lib/currency";
 
 const chartConfig = {
   pendapatan: {
     label: "Pendapatan",
-    color: "hsl(var(--primary))",
+    color: "hsl(var(--emerald-500, 150 84% 39%))",
+  },
+  pengeluaran: {
+    label: "Pengeluaran",
+    color: "hsl(var(--rose-500, 346 87% 60%))",
   },
 } satisfies ChartConfig;
 
@@ -96,32 +108,12 @@ const STATUS_COLORS: Record<string, string> = {
   Gagal: "#e11d48",
 };
 
-const EXCHANGE_RATE_USD = 16000;
-
-const parseCurrencyToNumber = (currencyString: string) => {
-  return parseInt(currencyString.replace(/[^0-9]/g, ""), 10) || 0;
-};
-
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
-
 export default function DashboardPage() {
   const navigate = useNavigate();
 
-  // State Preferensi Mata Uang & Info
-  const [mataUang, setMataUang] = useState("IDR");
-  const [headerUser, setHeaderUser] = useState({ name: "Admin" });
-  const [infoBisnis, setInfoBisnis] = useState({
-    nama: "Internal Sistem",
-    alamat: "Semua Wilayah",
-  });
+  // AMBIL DATA DARI ZUSTAND GLOBAL STORE
+  const { preferensi, infoBisnis, profil, invoices, expenses } = useAppStore();
+  const mataUang = preferensi.mataUang;
 
   // State Date Range Picker
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -139,27 +131,6 @@ export default function DashboardPage() {
     recentTransactions: true,
   });
 
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-      if (parsed?.perusahaan?.nama) {
-        setInfoBisnis({
-          nama: parsed.perusahaan.nama || "Perusahaan Anonim",
-          alamat: parsed.perusahaan.alamat || "Alamat belum diatur",
-        });
-      }
-    }
-
-    const storedUser = localStorage.getItem("currentUser");
-    if (storedUser) {
-      setHeaderUser(JSON.parse(storedUser));
-    }
-  }, []);
-
   const formatYAxis = (tickItem: number) => {
     return new Intl.NumberFormat(mataUang === "USD" ? "en-US" : "id-ID", {
       notation: "compact",
@@ -168,17 +139,14 @@ export default function DashboardPage() {
     }).format(tickItem);
   };
 
-  const convertAndFormat = (idrString: string) => {
-    const rawIdr = parseCurrencyToNumber(idrString);
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
-
+  // ==========================================
+  // KALKULASI METRIK & GRAFIK (DINAMIS DARI STORE)
+  // ==========================================
   const {
     totalPendapatan,
-    totalLunas,
+    totalPengeluaran,
+    labaBersih,
     totalMenunggu,
-    tingkatKesuksesan,
     chartData,
     statusData,
     aktivitasTerbaru,
@@ -186,24 +154,35 @@ export default function DashboardPage() {
     topClients,
   } = useMemo(() => {
     let pendapatan = 0;
+    let pengeluaran = 0;
     let lunas = 0;
     let pending = 0;
     let belumBayar = 0;
     let gagal = 0;
 
     const monthlyData = [
-      { bulan: "Jan", pendapatan: 0 },
-      { bulan: "Feb", pendapatan: 0 },
-      { bulan: "Mar", pendapatan: 0 },
-      { bulan: "Apr", pendapatan: 0 },
-      { bulan: "Mei", pendapatan: 0 },
+      { bulan: "Jan", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Feb", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Mar", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Apr", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Mei", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Jun", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Jul", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Ags", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Sep", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Okt", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Nov", pendapatan: 0, pengeluaran: 0 },
+      { bulan: "Des", pendapatan: 0, pengeluaran: 0 },
     ];
 
     const belumLunas: Invoice[] = [];
     const clientRevenue: Record<string, number> = {};
-    let totalDataTerfilter = 0;
 
-    dataAwal.forEach((invoice) => {
+    // 1. Kalkulasi Data Invoice (Pendapatan)
+    invoices.forEach((invoice) => {
+      // Abaikan jika tidak punya tanggal
+      if (!invoice.date) return;
+
       if (dateRange?.from) {
         const invDate = new Date(invoice.date).getTime();
         const start = new Date(dateRange.from).setHours(0, 0, 0, 0);
@@ -213,13 +192,12 @@ export default function DashboardPage() {
           59,
           999,
         );
-
         if (invDate < start || invDate > end) return;
       }
 
-      totalDataTerfilter += 1;
       const rawIdr = parseCurrencyToNumber(invoice.totalAmount);
-      const nominal = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+      const nominalChart =
+        mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
 
       if (!clientRevenue[invoice.clientName]) {
         clientRevenue[invoice.clientName] = 0;
@@ -227,12 +205,12 @@ export default function DashboardPage() {
 
       if (invoice.paymentStatus === "Lunas") {
         lunas += 1;
-        pendapatan += nominal;
-        clientRevenue[invoice.clientName] += nominal;
+        pendapatan += rawIdr;
+        clientRevenue[invoice.clientName] += rawIdr;
 
         const monthIndex = new Date(invoice.date).getMonth();
-        if (monthIndex >= 0 && monthIndex < 5) {
-          monthlyData[monthIndex].pendapatan += nominal;
+        if (monthIndex >= 0 && monthIndex < 12) {
+          monthlyData[monthIndex].pendapatan += nominalChart;
         }
       } else if (invoice.paymentStatus === "Pending") {
         pending += 1;
@@ -245,10 +223,34 @@ export default function DashboardPage() {
       }
     });
 
-    const tingkatSukses =
-      totalDataTerfilter > 0
-        ? ((lunas / totalDataTerfilter) * 100).toFixed(1)
-        : "0";
+    // 2. Kalkulasi Data Pengeluaran (Expense)
+    expenses.forEach((expense) => {
+      if (dateRange?.from) {
+        const expDate = new Date(expense.tanggal).getTime();
+        const start = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const end = new Date(dateRange.to || dateRange.from).setHours(
+          23,
+          59,
+          59,
+          999,
+        );
+        if (expDate < start || expDate > end) return;
+      }
+
+      if (expense.status === "Dibayar") {
+        const rawIdrExp = Number(expense.jumlah);
+        const nominalChartExp =
+          mataUang === "USD" ? rawIdrExp / EXCHANGE_RATE_USD : rawIdrExp;
+        pengeluaran += rawIdrExp;
+
+        const monthIndex = new Date(expense.tanggal).getMonth();
+        if (monthIndex >= 0 && monthIndex < 12) {
+          monthlyData[monthIndex].pengeluaran += nominalChartExp;
+        }
+      }
+    });
+
+    const labaBersihVal = pendapatan - pengeluaran;
 
     const statusChartData = [
       { name: "Lunas", value: lunas },
@@ -262,8 +264,9 @@ export default function DashboardPage() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 4);
 
-    const terbaru = dataAwal
+    const terbaru = invoices
       .filter((inv) => {
+        if (!inv.date) return false;
         if (!dateRange?.from) return true;
         const d = new Date(inv.date).getTime();
         return (
@@ -275,23 +278,31 @@ export default function DashboardPage() {
       .slice(0, 5);
 
     const mendesak = belumLunas
+      .filter((inv) => inv.dueDate)
       .sort(
         (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
       )
       .slice(0, 5);
 
+    // Potong bulan yang ditampilkan di chart hingga bulan saat ini (atau statis 5 bulan jika Anda preferensi desain lama)
+    const currentMonth = new Date().getMonth();
+    const activeMonthlyData = monthlyData.slice(
+      0,
+      Math.max(5, currentMonth + 1),
+    );
+
     return {
       totalPendapatan: pendapatan,
-      totalLunas: lunas,
+      totalPengeluaran: pengeluaran,
+      labaBersih: labaBersihVal,
       totalMenunggu: pending + belumBayar,
-      tingkatKesuksesan: tingkatSukses,
-      chartData: monthlyData,
+      chartData: activeMonthlyData,
       statusData: statusChartData,
       aktivitasTerbaru: terbaru,
       tagihanMendesak: mendesak,
       topClients: sortedClients,
     };
-  }, [mataUang, dateRange]);
+  }, [mataUang, dateRange, invoices, expenses]);
 
   const tanggalHariIni = format(new Date(), "EEEE, dd MMMM yyyy", {
     locale: id,
@@ -313,7 +324,8 @@ export default function DashboardPage() {
   };
 
   const handleExportExcel = () => {
-    const dataTerfilter = dataAwal.filter((invoice) => {
+    const dataTerfilter = invoices.filter((invoice) => {
+      if (!invoice.date) return false;
       if (!dateRange?.from) return true;
       const invDate = new Date(invoice.date).getTime();
       const start = new Date(dateRange.from).setHours(0, 0, 0, 0);
@@ -379,7 +391,7 @@ export default function DashboardPage() {
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">${i + 1}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: bold;">${k.name}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; color: #059669; font-weight: bold;">${formatCurrency(k.total, mataUang)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; color: #059669; font-weight: bold;">${convertAndFormatCurrency(k.total, mataUang)}</td>
       </tr>
     `,
       )
@@ -401,7 +413,7 @@ export default function DashboardPage() {
                 : "color: #991b1b;"
           }">${inv.paymentStatus}</span>
         </td>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormat(inv.totalAmount)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormatCurrency(parseCurrencyToNumber(inv.totalAmount), mataUang)}</td>
       </tr>
     `,
       )
@@ -416,7 +428,7 @@ export default function DashboardPage() {
         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-family: monospace;">${inv.invoice}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">${inv.clientName}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: center; color: #dc2626; font-weight: bold;">${inv.dueDate}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormat(inv.totalAmount)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormatCurrency(parseCurrencyToNumber(inv.totalAmount), mataUang)}</td>
       </tr>
     `,
             )
@@ -448,7 +460,7 @@ export default function DashboardPage() {
             <tr>
               <td>
                 <h1 class="title-report">Ringkasan Dashboard</h1>
-                <div class="meta-text">Dicetak Oleh: <b>${headerUser.name}</b></div>
+                <div class="meta-text">Dicetak Oleh: <b>${profil.nama}</b></div>
                 <div class="meta-text">Waktu Cetak: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}</div>
               </td>
               <td style="text-align: right; vertical-align: top;">
@@ -458,21 +470,21 @@ export default function DashboardPage() {
             </tr>
           </table>
           <div class="grid-metrics">
-            <div class="card-metric" style="border-top: 3px solid #3b82f6;">
-              <div class="metric-title">Total Pendapatan</div>
-              <div class="metric-value">${formatCurrency(totalPendapatan, mataUang)}</div>
-            </div>
             <div class="card-metric" style="border-top: 3px solid #10b981;">
-              <div class="metric-title">Invoice Lunas</div>
-              <div class="metric-value">${totalLunas} <span style="font-size:12px; color:#6b7280; font-weight:normal;">Tagihan</span></div>
+              <div class="metric-title">Total Pendapatan</div>
+              <div class="metric-value">${convertAndFormatCurrency(totalPendapatan, mataUang)}</div>
+            </div>
+            <div class="card-metric" style="border-top: 3px solid #f43f5e;">
+              <div class="metric-title">Total Pengeluaran</div>
+              <div class="metric-value">${convertAndFormatCurrency(totalPengeluaran, mataUang)}</div>
+            </div>
+            <div class="card-metric" style="border-top: 3px solid #3b82f6;">
+              <div class="metric-title">Laba Bersih</div>
+              <div class="metric-value">${convertAndFormatCurrency(labaBersih, mataUang)}</div>
             </div>
             <div class="card-metric" style="border-top: 3px solid #f59e0b;">
-              <div class="metric-title">Menunggu Pembayaran</div>
+              <div class="metric-title">Menunggu / Piutang</div>
               <div class="metric-value">${totalMenunggu} <span style="font-size:12px; color:#6b7280; font-weight:normal;">Tagihan</span></div>
-            </div>
-            <div class="card-metric" style="border-top: 3px solid #6366f1;">
-              <div class="metric-title">Tingkat Kesuksesan</div>
-              <div class="metric-value">${tingkatKesuksesan}%</div>
             </div>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
@@ -503,7 +515,7 @@ export default function DashboardPage() {
           </table>
           <div class="footer-signature">
             <div><p style="margin-bottom: 40px; color: #6b7280;">Dibuat Otomatis Oleh Sistem,</p><p style="font-weight: bold; border-top: 1px solid #9ca3af; padding-top: 4px; width: 160px;">Dashboard Reporting</p></div>
-            <div style="text-align: right;"><p style="margin-bottom: 40px; color: #6b7280;">Disetujui Oleh,</p><p style="font-weight: bold; border-top: 1px solid #9ca3af; padding-top: 4px; width: 160px; margin-left: auto;">${headerUser.name}</p></div>
+            <div style="text-align: right;"><p style="margin-bottom: 40px; color: #6b7280;">Disetujui Oleh,</p><p style="font-weight: bold; border-top: 1px solid #9ca3af; padding-top: 4px; width: 160px; margin-left: auto;">${profil.nama}</p></div>
           </div>
         </body>
       </html>
@@ -525,7 +537,10 @@ export default function DashboardPage() {
 
   const handleKirimEmailReminder = (item: Invoice) => {
     const namaPerusahaan = infoBisnis.nama;
-    const nominalTerformat = convertAndFormat(item.totalAmount);
+    const nominalTerformat = convertAndFormatCurrency(
+      parseCurrencyToNumber(item.totalAmount),
+      mataUang,
+    );
     const subject = encodeURIComponent(
       `[URGENT] Pengingat Batas Jatuh Tempo Pembayaran - ${item.invoice}`,
     );
@@ -569,7 +584,7 @@ export default function DashboardPage() {
             <Clock className="w-3.5 h-3.5 mr-1.5" /> {tanggalHariIni}
           </Badge>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Kembali bekerja, {headerUser.name} 👋
+            Kembali bekerja, {profil.nama} 👋
           </h1>
           <p className="text-muted-foreground">
             Berikut adalah ringkasan performa finansial bisnis Anda hari ini.
@@ -619,12 +634,8 @@ export default function DashboardPage() {
               </Button>
             </DialogTrigger>
 
-            {/* Menggunakan sistem layout referensi: p-0, overflow-hidden, border-0, shadow-xl */}
             <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
-              {/* Strip Gradien Atas Tetap Dipertahankan */}
               <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500" />
-
-              {/* Pembungkus Utama (Sistem p-6 yang menyatukan Header, Body, dan Footer) */}
               <div className="p-6">
                 <DialogHeader className="mb-5">
                   <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -637,9 +648,7 @@ export default function DashboardPage() {
                   </DialogDescription>
                 </DialogHeader>
 
-                {/* Konten Utama Form / Pilihan Ekspor */}
                 <div className="grid gap-5 py-2">
-                  {/* FORMAT OUTPUT BERKAS */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       Format Output Berkas
@@ -679,7 +688,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* BATASAN CAKUPAN KOMPONEN */}
                   <div className="space-y-2 pt-1">
                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <SlidersHorizontal className="w-3.5 h-3.5" /> Batasan
@@ -693,7 +701,7 @@ export default function DashboardPage() {
                             htmlFor="sec-metrics"
                             className="text-sm font-semibold cursor-pointer"
                           >
-                            Metrik Utama (Total & Piutang)
+                            Metrik Utama (Kas & Piutang)
                           </Label>
                           <p className="text-[11px] text-muted-foreground">
                             Angka akumulasi performa pada widget atas
@@ -769,7 +777,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* DIALOG FOOTER (Mengikuti Pola mt-6 border-t pt-4 dari referensi Anda) */}
                 <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3 sm:space-x-0">
                   <p className="text-[11px] text-muted-foreground hidden sm:block flex-1 pr-4">
                     * Pemrosesan disesuaikan dengan rentang tanggal.
@@ -777,7 +784,7 @@ export default function DashboardPage() {
 
                   <div className="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-2 shrink-0">
                     <Button
-                      variant="ghost" /* Mengikuti style tombol "Batalkan" di referensi Anda */
+                      variant="ghost"
                       onClick={() => setIsExportModalOpen(false)}
                       disabled={isExporting}
                       className="rounded-xl font-semibold h-10 w-full sm:w-auto"
@@ -820,52 +827,65 @@ export default function DashboardPage() {
       </div>
 
       {/* === METRIK UTAMA === */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="shadow-sm rounded-xl border-border/60 bg-gradient-to-br from-card to-card/50">
+      <div className="grid gap-4 lg:grid-cols-4 sm:grid-cols-2 grid-cols-1">
+        <Card className="shadow-sm rounded-xl border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground">
               Total Pendapatan
             </CardTitle>
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <DollarSign className="h-4 w-4 text-primary" />
+            <div className="p-2 bg-emerald-500/10 rounded-lg">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tight">
-              {formatCurrency(totalPendapatan, mataUang)}
+            <div className="text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+              {convertAndFormatCurrency(totalPendapatan, mataUang)}
             </div>
-            <p className="text-xs font-medium mt-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-3.5 h-3.5" /> +20.1%{" "}
-              <span className="text-muted-foreground font-normal">
-                vs bulan lalu
-              </span>
+            <p className="text-xs font-medium mt-2 text-muted-foreground">
+              Akumulasi invoice lunas
             </p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm rounded-xl border-border/60">
+        <Card className="shadow-sm rounded-xl border-rose-500/20 bg-gradient-to-br from-rose-500/5 to-transparent">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground">
-              Invoice Lunas
+              Total Pengeluaran
             </CardTitle>
-            <div className="p-2 bg-emerald-500/10 rounded-lg">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <div className="p-2 bg-rose-500/10 rounded-lg">
+              <TrendingDown className="h-4 w-4 text-rose-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tight">
-              {totalLunas}{" "}
-              <span className="text-base font-medium text-muted-foreground">
-                tagihan
-              </span>
+            <div className="text-2xl font-bold tracking-tight text-rose-700 dark:text-rose-400">
+              {convertAndFormatCurrency(totalPengeluaran, mataUang)}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Berhasil dicairkan dalam rentang aktif
+              Beban operasional (Dibayar)
             </p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm rounded-xl border-border/60">
+        <Card className="shadow-sm rounded-xl border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">
+              Laba Bersih
+            </CardTitle>
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Wallet className="h-4 w-4 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tight text-primary">
+              {convertAndFormatCurrency(labaBersih, mataUang)}
+            </div>
+            <p className="text-xs font-medium mt-2 text-muted-foreground">
+              Margin keuntungan riil
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm rounded-xl border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground">
               Menunggu Pembayaran
@@ -875,36 +895,14 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tight">
+            <div className="text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400">
               {totalMenunggu}{" "}
               <span className="text-base font-medium text-muted-foreground">
                 tagihan
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Butuh tindak lanjut segera
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm rounded-xl border-border/60">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">
-              Sukses Rate
-            </CardTitle>
-            <div className="p-2 bg-blue-500/10 rounded-lg">
-              <PieIcon className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tracking-tight">
-              {tingkatKesuksesan}%
-            </div>
-            <p className="text-xs font-medium mt-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-3.5 h-3.5" /> +1.2%{" "}
-              <span className="text-muted-foreground font-normal">
-                peningkatan konversi
-              </span>
+            <p className="text-xs font-medium mt-2 text-muted-foreground">
+              Piutang butuh tindak lanjut
             </p>
           </CardContent>
         </Card>
@@ -914,13 +912,17 @@ export default function DashboardPage() {
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-7 items-start">
         <Card className="shadow-sm rounded-xl border-border/60 lg:col-span-5 h-full flex flex-col">
           <CardHeader>
-            <CardTitle>Arus Kas Pendapatan</CardTitle>
+            <CardTitle>Arus Kas (Pendapatan vs Pengeluaran)</CardTitle>
             <CardDescription>
-              Akumulasi pembayaran lunas dari Januari hingga Mei tahun ini.
+              Komparasi pembayaran lunas dan beban biaya yang dikeluarkan pada
+              tahun ini.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-4 px-2 sm:px-6">
-            <ChartContainer config={chartConfig} className="h-full w-full">
+            <ChartContainer
+              config={chartConfig}
+              className="h-full w-full min-h-[300px]"
+            >
               <BarChart
                 data={chartData}
                 margin={{ left: 0, right: 0, top: 20 }}
@@ -957,9 +959,17 @@ export default function DashboardPage() {
                 />
                 <Bar
                   dataKey="pendapatan"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={45}
-                  className="fill-primary"
+                  name="Pendapatan"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                  className="fill-emerald-500"
+                />
+                <Bar
+                  dataKey="pengeluaran"
+                  name="Pengeluaran"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                  className="fill-rose-500"
                 />
               </BarChart>
             </ChartContainer>
@@ -969,7 +979,9 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 space-y-6 flex flex-col h-full">
           <Card className="shadow-sm rounded-xl border-border/60">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribusi Status</CardTitle>
+              <CardTitle className="text-base">
+                Distribusi Status Tagihan
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-center h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -1007,7 +1019,7 @@ export default function DashboardPage() {
           <Card className="shadow-sm rounded-xl border-border/60 flex-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Briefcase className="w-4 h-4" /> Klien Teratas
+                <Briefcase className="w-4 h-4" /> Klien Teratas (Revenue)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1028,7 +1040,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <span className="text-sm font-semibold shrink-0">
-                    {formatCurrency(client.total, mataUang)}
+                    {convertAndFormatCurrency(client.total, mataUang)}
                   </span>
                 </div>
               ))}
@@ -1062,7 +1074,7 @@ export default function DashboardPage() {
           <Tabs defaultValue="terbaru" className="w-full">
             <div className="px-6 pt-4">
               <TabsList className="grid w-full max-w-full md:max-w-md grid-cols-2">
-                <TabsTrigger value="terbaru">Aktivitas Terbaru</TabsTrigger>
+                <TabsTrigger value="terbaru">Invoice Terbaru</TabsTrigger>
                 <TabsTrigger value="mendesak" className="relative">
                   Jatuh Tempo
                   {tagihanMendesak.length > 0 && (
@@ -1095,7 +1107,10 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 mt-3 sm:mt-0 shrink-0">
                       <div className="font-bold text-sm">
-                        {convertAndFormat(item.totalAmount)}
+                        {convertAndFormatCurrency(
+                          parseCurrencyToNumber(item.totalAmount),
+                          mataUang,
+                        )}
                       </div>
                       <Badge
                         variant="outline"
@@ -1142,12 +1157,15 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center sm:gap-4 gap-1 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
                         <div className="font-bold text-sm">
-                          {convertAndFormat(item.totalAmount)}
+                          {convertAndFormatCurrency(
+                            parseCurrencyToNumber(item.totalAmount),
+                            mataUang,
+                          )}
                         </div>
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-8 text-xs font-semibold rounded-md gap-1.5 flex items-center"
+                          className="h-8 text-xs font-semibold rounded-md gap-1.5 flex items-center cursor-pointer"
                           onClick={() => handleKirimEmailReminder(item)}
                         >
                           <span className="hidden sm:flex">Tindak Lanjuti</span>

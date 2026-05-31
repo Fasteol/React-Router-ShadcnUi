@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Mail, Lock, User, Loader2, Receipt } from "lucide-react";
+import { Mail, Lock, User, Loader2 } from "lucide-react"; // Hapus Receipt
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -55,12 +55,14 @@ export default function RegisterPage() {
         return;
       }
 
-      // 3. Buat objek User baru
+      // 3. Buat objek User baru dengan field lengkap agar konsisten dengan nav-user.tsx
       const newUser: UserType = {
         id: `USR-${Date.now().toString().slice(-4)}`, // Generate ID unik
         name: nama,
         email: email,
         password: password,
+        avatar: "", // Default kosong, agar tidak error di nav-user
+        role: "User", // Default role
       };
 
       // 4. Simpan ke Database Virtual
@@ -80,7 +82,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4 font-sans animate-in fade-in duration-700">
       <div className="w-full max-w-[420px]">
         <Card className="rounded-3xl shadow-xl border-border/50 overflow-hidden bg-card/95 backdrop-blur-sm">
-          <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
+          {/* Mengubah warna gradient menjadi primary agar seragam dengan Login.tsx */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-primary to-primary/60"></div>
 
           <CardHeader className="pb-6 pt-8 text-center">
             <CardTitle className="text-xl">Buat Akun Baru</CardTitle>

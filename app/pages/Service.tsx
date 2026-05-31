@@ -1,6 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
-import { toast } from "sonner";
+import { useState, useMemo } from "react";
 import {
   Package,
   TrendingUp,
@@ -9,15 +7,10 @@ import {
   Plus,
   Edit2,
   Trash2,
-  AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { cn } from "~/lib/utils";
+import { toast } from "sonner";
 
-// IMPORT DATA DARI INVOICES.TS
-import { dataLayanan, type Service } from "~/data/invoices";
-
-// IMPORT KOMPONEN UI SHADCN
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -32,15 +25,6 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "~/components/ui/pagination";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,71 +32,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
+import { convertAndFormatCurrency } from "~/lib/currency";
+import { useAppStore } from "~/store/useAppStore";
+import { ConfirmDeleteModal } from "~/components/ui/confirm-delete-modal";
+import { CustomPagination } from "~/components/ui/custom-pagination";
 
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
+// Import tipe data dari file types
+import type { Service } from "~/types/index";
 
-// ==========================================
-// FUNGSI GENERATOR ID LAYANAN OTOMATIS
-// ==========================================
 const generateServiceID = (dataServices: Service[]) => {
   const prefix = "S";
   if (dataServices.length === 0) return `${prefix}001`;
-
-  const urutanTerakhir = dataServices.map((item) => {
-    const bagianAngka = item.id.replace(prefix, "");
-    return parseInt(bagianAngka, 10) || 0;
-  });
-
-  const nextUrutan = Math.max(...urutanTerakhir) + 1;
-  return `${prefix}${String(nextUrutan).padStart(3, "0")}`;
+  const urutanTerakhir = dataServices.map(
+    (item) => parseInt(item.id.replace(prefix, ""), 10) || 0,
+  );
+  return `${prefix}${String(Math.max(...urutanTerakhir) + 1).padStart(3, "0")}`;
 };
 
-// ==========================================
-// KOMPONEN UTAMA
-// ==========================================
-export default function ServicesPage() {
-  const navigate = useNavigate();
+export default function ServicePage() {
+  const mataUang = useAppStore((state) => state.preferensi.mataUang);
 
-  // STATE UTAMA
-  const [services, setServices] = useState<Service[]>(dataLayanan);
+  // Mengambil state dan actions dari Global Store Zustand
+  const { services, addService, updateService, deleteService } = useAppStore();
+
   const [kataKunci, setKataKunci] = useState("");
-  const [mataUang, setMataUang] = useState("IDR");
-
-  // STATE PAGINASI
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
   const [itemPerHalaman, setItemPerHalaman] = useState(10);
 
-  // STATE DIALOG & FORM
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
   const [formData, setFormData] = useState<Service>({
@@ -122,55 +69,36 @@ export default function ServicesPage() {
     harga: 0,
   });
 
-  // STATE HAPUS DATA
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // MENGAMBIL PREFERENSI MATA UANG
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-    }
-  }, []);
-
-  // FUNGSI KONVERSI DINAMIS
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
-
-  // FILTERING DATA MENGGUNAKAN USEMEMO
-  const dataTersaring = useMemo(() => {
-    return services.filter((item) => {
-      return (
-        item.nama.toLowerCase().includes(kataKunci.toLowerCase()) ||
-        item.deskripsi.toLowerCase().includes(kataKunci.toLowerCase()) ||
-        item.id.toLowerCase().includes(kataKunci.toLowerCase())
+  const { dataTersaring, totalLayanan, rataRataHarga, layananPremium } =
+    useMemo(() => {
+      const tersaring = services.filter(
+        (item) =>
+          item.nama.toLowerCase().includes(kataKunci.toLowerCase()) ||
+          item.id.toLowerCase().includes(kataKunci.toLowerCase()),
       );
-    });
-  }, [services, kataKunci]);
+      const total = services.length;
+      const rataRata =
+        total > 0
+          ? services.reduce((acc, curr) => acc + curr.harga, 0) / total
+          : 0;
+      const premium = services.filter((s) => s.harga >= 3000000).length;
+      return {
+        dataTersaring: tersaring,
+        totalLayanan: total,
+        rataRataHarga: rataRata,
+        layananPremium: premium,
+      };
+    }, [services, kataKunci]);
 
-  // STATISTIK OVERVIEW
-  const totalLayanan = services.length;
-  const rataRataHarga =
-    totalLayanan > 0
-      ? services.reduce((acc, curr) => acc + curr.harga, 0) / totalLayanan
-      : 0;
-  const layananPremium = services.filter((s) => s.harga >= 3000000).length;
-
-  // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
-  const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
-  const indexAkhir = indexAwal + itemPerHalaman;
-  const dataTampil = dataTersaring.slice(indexAwal, indexAkhir);
+  const dataTampil = dataTersaring.slice(
+    (halamanSaatIni - 1) * itemPerHalaman,
+    halamanSaatIni * itemPerHalaman,
+  );
 
-  // ==========================================
-  // FUNGSI AKSI (TAMBAH, EDIT, HAPUS)
-  // ==========================================
   const bukaFormTambah = () => {
     setFormMode("tambah");
     setFormData({
@@ -195,109 +123,32 @@ export default function ServicesPage() {
       );
       return;
     }
-
     if (formMode === "tambah") {
-      const isExist = services.some((item) => item.id === formData.id);
-      if (isExist) {
-        toast.error(`Gagal! ID Layanan ${formData.id} sudah digunakan.`);
-        return;
-      }
-      setServices([formData, ...services]);
+      if (services.some((item) => item.id === formData.id))
+        return toast.error(`Gagal! ID Layanan ${formData.id} sudah digunakan.`);
+
+      addService(formData);
       toast.success(`Berhasil menambahkan layanan ${formData.nama}!`);
     } else {
-      const dataBaru = services.map((item) =>
-        item.id === formData.id ? formData : item,
-      );
-      setServices(dataBaru);
+      updateService(formData.id, formData);
       toast.success(`Berhasil memperbarui layanan ${formData.nama}!`);
     }
     setIsDialogOpen(false);
   };
 
-  const konfirmasiHapus = (idLayanan: string) => {
-    setIdYangDihapus(idLayanan);
-    setIsDeleteDialogOpen(true);
-  };
-
   const eksekusiHapus = () => {
     if (idYangDihapus) {
-      const dataBaru = services.filter((item) => item.id !== idYangDihapus);
-      setServices(dataBaru);
-
-      if (dataTampil.length === 1 && halamanSaatIni > 1) {
+      deleteService(idYangDihapus);
+      if (dataTampil.length === 1 && halamanSaatIni > 1)
         setHalamanSaatIni(halamanSaatIni - 1);
-      }
-      toast.success(`Layanan ${idYangDihapus} berhasil dihapus.`);
+      toast.success(`Layanan berhasil dihapus.`);
     }
     setIsDeleteDialogOpen(false);
     setIdYangDihapus(null);
   };
 
-  const renderPaginationItems = () => {
-    const items = [];
-    const batasTampil = 5;
-
-    if (totalHalaman <= batasTampil) {
-      for (let i = 1; i <= totalHalaman; i++) items.push(i);
-    } else {
-      if (halamanSaatIni <= 3) {
-        items.push(1, 2, 3, 4, "ellipsis", totalHalaman);
-      } else if (halamanSaatIni >= totalHalaman - 2) {
-        items.push(
-          1,
-          "ellipsis",
-          totalHalaman - 3,
-          totalHalaman - 2,
-          totalHalaman - 1,
-          totalHalaman,
-        );
-      } else {
-        items.push(
-          1,
-          "ellipsis",
-          halamanSaatIni - 1,
-          halamanSaatIni,
-          halamanSaatIni + 1,
-          "ellipsis",
-          totalHalaman,
-        );
-      }
-    }
-
-    return items.map((item, index) => {
-      if (item === "ellipsis") {
-        return (
-          <PaginationItem key={`ellipsis-${index}`}>
-            <PaginationEllipsis />
-          </PaginationItem>
-        );
-      }
-
-      return (
-        <PaginationItem key={item}>
-          <PaginationLink
-            href="#"
-            isActive={halamanSaatIni === item}
-            onClick={(e) => {
-              e.preventDefault();
-              setHalamanSaatIni(item as number);
-            }}
-            className={
-              halamanSaatIni === item
-                ? "rounded-xl"
-                : "rounded-xl hover:bg-muted"
-            }
-          >
-            {item}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    });
-  };
-
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -314,67 +165,55 @@ export default function ServicesPage() {
         </p>
       </div>
 
-      {/* OVERVIEW CARDS (METRIK) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
+          <div className="p-3 bg-primary/10 text-primary rounded-xl w-fit mb-3">
             <Package className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {totalLayanan}
-          </div>
+          <div className="text-3xl font-bold">{totalLayanan}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Keseluruhan Layanan Aktif
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
+          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl w-fit mb-3">
             <TrendingUp className="w-6 h-6" />
           </div>
-          <div
-            className="text-2xl font-bold text-foreground truncate"
-            title={convertAndFormat(rataRataHarga)}
-          >
-            {convertAndFormat(rataRataHarga)}
+          <div className="text-2xl font-bold">
+            {convertAndFormatCurrency(rataRataHarga, mataUang)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Rata-rata Harga Pasar
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
+          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl w-fit mb-3">
             <Star className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {layananPremium}
-          </div>
+          <div className="text-2xl font-bold">{layananPremium}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Layanan Premium (≥ {convertAndFormat(3000000)})
+            Layanan Premium
           </div>
         </div>
       </div>
 
-      {/* FILTER BAR & TABLE */}
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
           <div className="relative flex-1 md:max-w-md w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Cari ID, nama, atau deskripsi layanan..."
+              placeholder="Cari ID atau nama layanan..."
               value={kataKunci}
               onChange={(e) => {
                 setKataKunci(e.target.value);
                 setHalamanSaatIni(1);
               }}
-              className="pl-9 rounded-xl w-full"
+              className="pl-9 rounded-xl w-full h-10 border-border/50"
             />
           </div>
-
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
+            className="rounded-xl gap-2 shadow-sm font-semibold h-10"
           >
             <Plus className="w-4 h-4" /> Tambah Layanan
           </Button>
@@ -384,298 +223,173 @@ export default function ServicesPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-24 font-semibold">ID</TableHead>
-                <TableHead className="w-1/3 font-semibold">
-                  Nama Layanan
-                </TableHead>
-                <TableHead className="font-semibold">Deskripsi</TableHead>
-                <TableHead className="text-right font-semibold">
-                  Harga ({mataUang})
-                </TableHead>
-                <TableHead className="text-center w-32 font-semibold">
-                  Aksi
-                </TableHead>
+                <TableHead className="w-24">ID</TableHead>
+                <TableHead className="w-1/3">Nama Layanan</TableHead>
+                <TableHead>Deskripsi</TableHead>
+                <TableHead className="text-right">Harga ({mataUang})</TableHead>
+                <TableHead className="text-center w-32">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dataTampil.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center h-32 text-muted-foreground"
-                  >
-                    Tidak ada data layanan ditemukan.
+              {dataTampil.map((layanan) => (
+                <TableRow
+                  key={layanan.id}
+                  className="hover:bg-muted/40 transition-colors"
+                >
+                  <TableCell className="font-semibold text-muted-foreground">
+                    {layanan.id}
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-bold text-foreground">
+                      {layanan.nama}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <p className="text-muted-foreground text-sm truncate max-w-[250px]">
+                      {layanan.deskripsi}
+                    </p>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="font-bold bg-muted/50 px-3 py-1 rounded-md w-fit ml-auto">
+                      {convertAndFormatCurrency(layanan.harga, mataUang)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => bukaFormEdit(layanan)}
+                        className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setIdYangDihapus(layanan.id);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                        className="h-8 w-8 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                dataTampil.map((layanan) => (
-                  <TableRow
-                    key={layanan.id}
-                    className="hover:bg-muted/40 transition-colors"
-                  >
-                    <TableCell className="font-semibold text-muted-foreground">
-                      {layanan.id}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-foreground">
-                        {layanan.nama}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <p
-                        className="text-muted-foreground text-sm truncate max-w-[250px]"
-                        title={layanan.deskripsi}
-                      >
-                        {layanan.deskripsi}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit ml-auto">
-                        {convertAndFormat(layanan.harga)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => bukaFormEdit(layanan)}
-                          className="h-8 w-8 text-blue-600 rounded-lg hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => konfirmasiHapus(layanan.id)}
-                          className="h-8 w-8 text-red-600 rounded-lg hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                          title="Hapus"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION CONTROLLER */}
-        {totalHalaman > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
-              <span>Tampilkan</span>
-              <Select
-                value={itemPerHalaman.toString()}
-                onValueChange={(val) => {
-                  setItemPerHalaman(Number(val));
-                  setHalamanSaatIni(1);
-                }}
-              >
-                <SelectTrigger className="w-[70px] h-7 rounded-md border-0 bg-transparent shadow-none focus:ring-0 px-1 font-semibold text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
-              <span>data</span>
-            </div>
-
-            <Pagination className="w-auto mx-0">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni > 1)
-                        setHalamanSaatIni(halamanSaatIni - 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni === 1
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-                {renderPaginationItems()}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni < totalHalaman)
-                        setHalamanSaatIni(halamanSaatIni + 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni >= totalHalaman
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
+        <CustomPagination
+          halamanSaatIni={halamanSaatIni}
+          setHalamanSaatIni={setHalamanSaatIni}
+          totalHalaman={totalHalaman}
+          itemPerHalaman={itemPerHalaman}
+          setItemPerHalaman={setItemPerHalaman}
+        />
       </div>
 
-      {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
-      ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
-          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
-          <div className="p-6">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl font-bold">
-                {formMode === "tambah"
-                  ? "Tambah Layanan Baru"
-                  : "Ubah Data Layanan"}
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                {formMode === "tambah"
-                  ? "Masukkan detail informasi untuk layanan atau produk baru."
-                  : "Sesuaikan kembali informasi detail layanan yang sudah ada."}
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[500px] sm:rounded-[1.5rem] p-0 overflow-hidden border border-border/50 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60 shrink-0"></div>
 
-            <div className="grid gap-5 py-2">
-              <div className="grid gap-2">
-                <Label htmlFor="id" className="font-semibold">
-                  ID Layanan
-                </Label>
-                <Input
-                  id="id"
-                  value={formData.id}
-                  disabled
-                  className="rounded-xl h-10 bg-muted/50 font-bold"
-                />
-              </div>
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="text-2xl font-bold tracking-tight">
+              {formMode === "tambah"
+                ? "Tambah Layanan Baru"
+                : "Ubah Data Layanan"}
+            </DialogTitle>
+            <DialogDescription>
+              Tambahkan atau sesuaikan detail penawaran jasa maupun produk di
+              bawah.
+            </DialogDescription>
+          </DialogHeader>
 
-              <div className="grid gap-2">
-                <Label htmlFor="nama" className="font-semibold">
-                  Nama Layanan / Produk
-                </Label>
-                <Input
-                  id="nama"
-                  placeholder="Contoh: Jasa Desain UI/UX"
-                  value={formData.nama}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nama: e.target.value })
-                  }
-                  className="rounded-xl h-10"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="deskripsi" className="font-semibold">
-                  Deskripsi Lengkap
-                </Label>
-                <Textarea
-                  id="deskripsi"
-                  placeholder="Jelaskan spesifikasi detail mengenai layanan..."
-                  value={formData.deskripsi}
-                  onChange={(e) =>
-                    setFormData({ ...formData, deskripsi: e.target.value })
-                  }
-                  className="rounded-xl min-h-[100px] resize-none"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="harga" className="font-semibold">
-                  Harga Patokan (Mata Uang Dasar: IDR)
-                </Label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70 pointer-events-none select-none">
-                    Rp
-                  </div>
-                  <Input
-                    id="harga"
-                    type="number"
-                    placeholder="0"
-                    value={formData.harga || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        harga: Number(e.target.value),
-                      })
-                    }
-                    className="rounded-xl pl-10 pr-4 h-10 font-bold font-mono text-base"
-                  />
+          <div className="px-6 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-5">
+            <div className="grid gap-2">
+              <Label className="font-semibold">ID Layanan</Label>
+              <Input
+                value={formData.id}
+                disabled
+                className="rounded-xl h-10 bg-muted/50 font-bold border-border/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Nama Layanan / Produk</Label>
+              <Input
+                placeholder="Contoh: Pembuatan Website E-Commerce..."
+                value={formData.nama}
+                onChange={(e) =>
+                  setFormData({ ...formData, nama: e.target.value })
+                }
+                className="rounded-xl h-10 border-border/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Deskripsi</Label>
+              <Textarea
+                placeholder="Tuliskan spesifikasi detail mengenai paket layanan yang ditawarkan..."
+                rows={3}
+                value={formData.deskripsi}
+                onChange={(e) =>
+                  setFormData({ ...formData, deskripsi: e.target.value })
+                }
+                className="rounded-xl resize-none border-border/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Harga Patokan</Label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70">
+                  Rp
                 </div>
-                <p className="text-[11px] text-muted-foreground/80 pl-1 leading-relaxed mt-0.5">
-                  * Masukkan angka murni tanpa pemisah. Nilai akan otomatis
-                  terkonversi menjadi{" "}
-                  <span className="font-bold text-foreground">{mataUang}</span>{" "}
-                  di tabel berdasarkan pengaturan Anda.
-                </p>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={formData.harga || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      harga: Number(e.target.value),
+                    })
+                  }
+                  className="rounded-xl pl-10 h-10 font-bold font-mono text-base border-border/50"
+                />
               </div>
             </div>
-
-            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl w-full sm:w-auto font-medium"
-              >
-                Batal
-              </Button>
-              <Button
-                onClick={handleSimpan}
-                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Katalog
-              </Button>
-            </DialogFooter>
           </div>
+
+          <DialogFooter className="px-6 pt-4 pb-8 border-t border-border/50 bg-muted/10 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-xl font-medium h-10"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleSimpan}
+              className="rounded-xl shadow-md font-bold h-10"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ==========================================
-          ALERT DIALOG DELETE
-      ========================================== */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent className="sm:rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="w-5 h-5" /> Hapus Data Layanan?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm mt-2">
-              Tindakan ini permanen. Layanan dengan ID{" "}
-              <strong className="text-foreground">{idYangDihapus}</strong> akan
-              dihapus dari daftar katalog produk.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <AlertDialogCancel
-              onClick={() => setIdYangDihapus(null)}
-              className="rounded-xl w-full sm:w-auto mt-0"
-            >
-              Batal
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl w-full sm:w-auto shadow-md"
-            >
-              Ya, Hapus
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteModal
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setIdYangDihapus(null);
+        }}
+        onConfirm={eksekusiHapus}
+        title="Hapus Data Layanan?"
+        itemName={idYangDihapus || "layanan ini"}
+      />
     </div>
   );
 }

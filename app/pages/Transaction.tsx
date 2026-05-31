@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router";
+import React, { useState, useMemo } from "react";
 import {
   Check,
   ChevronsUpDown,
@@ -16,22 +15,14 @@ import {
   Edit2,
   Trash2,
   Calendar as CalendarIcon,
+  Wallet,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
-import { format } from "date-fns"; // Pastikan date-fns terinstal
+import { format } from "date-fns";
+import { id } from "date-fns/locale";
 import { Calendar } from "~/components/ui/calendar";
 
-// IMPORT DATA DARI INVOICES.TS
-import {
-  dataAwal,
-  daftarKlien,
-  dataLayanan,
-  type Invoice,
-  type Service,
-} from "~/data/invoices";
-
-// IMPORT KOMPONEN UI SHADCN
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -45,15 +36,6 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "~/components/ui/pagination";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -61,23 +43,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -92,83 +57,52 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
+import {
+  convertAndFormatCurrency,
+  parseCurrencyToNumber,
+} from "~/lib/currency";
+import { useAppStore } from "~/store/useAppStore";
+import { ConfirmDeleteModal } from "~/components/ui/confirm-delete-modal";
+import { CustomPagination } from "~/components/ui/custom-pagination";
 
-const parseCurrencyToNumber = (currencyString: string | number) => {
-  if (!currencyString) return 0;
-  const str = String(currencyString);
-  if (str.includes("$") || str.includes("USD")) {
-    const numericPart = str.replace(/[^0-9.]/g, "");
-    return Math.round(parseFloat(numericPart) * EXCHANGE_RATE_USD) || 0;
-  }
-  return parseInt(str.replace(/[^0-9]/g, ""), 10) || 0;
+// Import tipe data dari file types
+import type { Invoice, Service } from "~/types/index";
+
+// Tipe ekstensi khusus agar sesuai dengan kebutuhan form antarmuka
+type TransactionFormData = Invoice & {
+  clientEmail?: string;
+  paymentMethod?: string;
+  date?: string;
+  services?: Service[];
 };
 
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
-
-// ==========================================
-// FUNGSI GENERATOR ID INVOICE OTOMATIS
-// ==========================================
 const generateInvoiceID = (dataInvoices: Invoice[]) => {
-  const tanggalHariIni = new Date();
-  const tahun = tanggalHariIni.getFullYear();
-  const bulan = String(tanggalHariIni.getMonth() + 1).padStart(2, "0");
-  const tanggal = String(tanggalHariIni.getDate()).padStart(2, "0");
-
-  const prefix = `INV-${tahun}${bulan}${tanggal}-`;
-
+  const tgl = new Date();
+  const prefix = `INV-${tgl.getFullYear()}${String(tgl.getMonth() + 1).padStart(2, "0")}${String(tgl.getDate()).padStart(2, "0")}-`;
   const invoiceHariIni = dataInvoices.filter((item) =>
     item.invoice.startsWith(prefix),
   );
-
-  let nextUrutan = 1;
+  let next = 1;
   if (invoiceHariIni.length > 0) {
-    const urutanTerakhir = invoiceHariIni.map((item) => {
-      const bagianAngka = item.invoice.split("-")[2];
-      return parseInt(bagianAngka, 10) || 0;
-    });
-    nextUrutan = Math.max(...urutanTerakhir) + 1;
+    next =
+      Math.max(
+        ...invoiceHariIni.map(
+          (item) => parseInt(item.invoice.split("-")[2], 10) || 0,
+        ),
+      ) + 1;
   }
-
-  const formatUrutan = String(nextUrutan).padStart(3, "0");
-  return `${prefix}${formatUrutan}`;
+  return `${prefix}${String(next).padStart(3, "0")}`;
 };
 
-// ==========================================
-// KOMPONEN UTAMA
-// ==========================================
 export default function TransactionPage() {
-  const navigate = useNavigate();
+  const mataUang = useAppStore((state) => state.preferensi.mataUang);
 
-  const [mataUang, setMataUang] = useState("IDR");
+  // Mengambil data klien dan layanan dari store untuk combobox
+  const { clients: daftarKlien, services: dataLayanan } = useAppStore();
 
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-    }
-  }, []);
+  // Mengambil state dan actions invoices dari Global Store Zustand
+  const { invoices, addInvoice, updateInvoice, deleteInvoice } = useAppStore();
 
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
-
-  const [invoices, setInvoices] = useState<Invoice[]>(dataAwal);
   const [kataKunci, setKataKunci] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua");
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
@@ -184,8 +118,11 @@ export default function TransactionPage() {
     new Date(),
   );
   const [bulanJatuhTempo, setBulanJatuhTempo] = useState<Date>(new Date());
+  const [openComboboxStatus, setOpenComboboxStatus] = useState(false);
+  const [openComboboxMetode, setOpenComboboxMetode] = useState(false);
+  const [openFilterStatus, setOpenFilterStatus] = useState(false);
 
-  const [formData, setFormData] = useState<Invoice>({
+  const [formData, setFormData] = useState<TransactionFormData>({
     id: "",
     invoice: "",
     clientName: "",
@@ -201,103 +138,78 @@ export default function TransactionPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // ==========================================
-  // LOGIKA TANGGAL OTOMATIS (NET 14)
-  // ==========================================
-  // Gunakan fungsi ini untuk menggantikan fungsi lama Anda
   const handleTanggalDibuatChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const tanggalBaru = e.target.value; // Format: YYYY-MM-DD
-
+    const tanggalBaru = e.target.value;
     if (tanggalBaru) {
-      // 1. Pecah string tanggal menjadi tahun, bulan, hari
       const [year, month, day] = tanggalBaru.split("-").map(Number);
-
-      // 2. Buat objek tanggal baru tanpa efek zona waktu UTC
       const dateObj = new Date(year, month - 1, day);
-
-      // 3. Tambahkan 14 hari
       dateObj.setDate(dateObj.getDate() + 14);
-
-      // 4. Format manual kembali ke YYYY-MM-DD agar angka tidak bergeser
-      const y = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-      const d = String(dateObj.getDate()).padStart(2, "0");
-
-      const jatuhTempoOtomatis = `${y}-${m}-${d}`;
-
+      const y = dateObj.getFullYear(),
+        m = String(dateObj.getMonth() + 1).padStart(2, "0"),
+        d = String(dateObj.getDate()).padStart(2, "0");
       setFormData({
         ...formData,
         date: tanggalBaru,
-        dueDate: jatuhTempoOtomatis,
+        dueDate: `${y}-${m}-${d}`,
       });
     } else {
       setFormData({ ...formData, date: "", dueDate: "" });
     }
   };
 
-  // ==========================================
-  // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER
-  // ==========================================
-  const dataTersaring = useMemo(() => {
-    return invoices.filter((item) => {
-      const cocokKataKunci =
-        item.invoice.toLowerCase().includes(kataKunci.toLowerCase()) ||
-        item.clientName.toLowerCase().includes(kataKunci.toLowerCase());
+  const { dataTersaring, dataLunas, dataPending, dataBelumBayar, dataGagal } =
+    useMemo(() => {
+      const tersaring = invoices.filter((item) => {
+        const cocokKataKunci =
+          item.invoice.toLowerCase().includes(kataKunci.toLowerCase()) ||
+          item.clientName.toLowerCase().includes(kataKunci.toLowerCase());
+        const cocokStatus =
+          filterStatus === "Semua" || item.paymentStatus === filterStatus;
+        return cocokKataKunci && cocokStatus;
+      });
 
-      const cocokStatus =
-        filterStatus === "Semua" || item.paymentStatus === filterStatus;
+      let lunas = 0,
+        pending = 0,
+        belumBayar = 0,
+        gagal = 0;
+      invoices.forEach((item) => {
+        if (item.paymentStatus === "Lunas") lunas++;
+        else if (item.paymentStatus === "Pending") pending++;
+        else if (item.paymentStatus === "Belum Bayar") belumBayar++;
+        else if (item.paymentStatus === "Gagal") gagal++;
+      });
 
-      return cocokKataKunci && cocokStatus;
-    });
-  }, [invoices, kataKunci, filterStatus]);
+      return {
+        dataTersaring: tersaring,
+        dataLunas: lunas,
+        dataPending: pending,
+        dataBelumBayar: belumBayar,
+        dataGagal: gagal,
+      };
+    }, [invoices, kataKunci, filterStatus]);
 
-  const { dataLunas, dataPending, dataBelumBayar, dataGagal } = useMemo(() => {
-    let lunas = 0,
-      pending = 0,
-      belumBayar = 0,
-      gagal = 0;
-    invoices.forEach((item) => {
-      if (item.paymentStatus === "Lunas") lunas++;
-      else if (item.paymentStatus === "Pending") pending++;
-      else if (item.paymentStatus === "Belum Bayar") belumBayar++;
-      else if (item.paymentStatus === "Gagal") gagal++;
-    });
-    return {
-      dataLunas: lunas,
-      dataPending: pending,
-      dataBelumBayar: belumBayar,
-      dataGagal: gagal,
-    };
-  }, [invoices]);
-
-  // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
-  const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
-  const indexAkhir = indexAwal + itemPerHalaman;
-  const dataTampil = dataTersaring.slice(indexAwal, indexAkhir);
+  const dataTampil = dataTersaring.slice(
+    (halamanSaatIni - 1) * itemPerHalaman,
+    halamanSaatIni * itemPerHalaman,
+  );
 
-  const toggleRow = (invoiceId: string) => {
+  const toggleRow = (invoiceId: string) =>
     setExpandedRow((prev) => (prev === invoiceId ? null : invoiceId));
-  };
 
-  // ==========================================
-  // FUNGSI AKSI (TAMBAH, EDIT, HAPUS)
-  // ==========================================
   const bukaFormTambah = () => {
-    const tglDibuat = new Date().toISOString().split("T")[0];
-    const dateObj = new Date(tglDibuat);
+    const dateObj = new Date();
+    const tglDibuat = dateObj.toISOString().split("T")[0];
     dateObj.setDate(dateObj.getDate() + 14);
     const tglJatuhTempo = dateObj.toISOString().split("T")[0];
-
-    const idOtomatis = generateInvoiceID(invoices);
 
     setFormMode("tambah");
     setSelectedServices([]);
     setFormData({
       id: `id-${Date.now()}`,
-      invoice: idOtomatis,
+      invoice: generateInvoiceID(invoices),
       clientName: "",
       clientEmail: "",
       paymentStatus: "Pending",
@@ -310,7 +222,7 @@ export default function TransactionPage() {
     setIsDialogOpen(true);
   };
 
-  const bukaFormEdit = (dataAsli: Invoice) => {
+  const bukaFormEdit = (dataAsli: TransactionFormData) => {
     setFormMode("edit");
     setSelectedServices(dataAsli.services || []);
     setFormData(dataAsli);
@@ -319,7 +231,6 @@ export default function TransactionPage() {
 
   const handleSimpan = () => {
     const nominalAkhir = parseCurrencyToNumber(formData.totalAmount);
-
     if (
       !formData.invoice ||
       !formData.clientName ||
@@ -331,141 +242,55 @@ export default function TransactionPage() {
       );
       return;
     }
-
-    const finalData = {
+    const finalData: Invoice = {
       ...formData,
-      services: selectedServices,
+      services: selectedServices, // Terkait di ekstensi type
       totalAmount: nominalAkhir.toString(),
     };
 
     if (formMode === "tambah") {
-      const isExist = invoices.some(
-        (item) => item.invoice === formData.invoice,
-      );
-      if (isExist) {
-        toast.error(`Gagal! Invoice ${formData.invoice} sudah digunakan.`);
-        return;
-      }
-      setInvoices([finalData, ...invoices]);
+      addInvoice(finalData);
       toast.success(`Berhasil menambahkan invoice ${formData.invoice}!`);
     } else {
-      const dataBaru = invoices.map((item) =>
-        item.invoice === formData.invoice ? finalData : item,
-      );
-      setInvoices(dataBaru);
+      updateInvoice(formData.id, finalData);
       toast.success(`Berhasil memperbarui invoice ${formData.invoice}!`);
     }
-
     setIsDialogOpen(false);
-  };
-
-  const konfirmasiHapus = (idInvoice: string) => {
-    setIdYangDihapus(idInvoice);
-    setIsDeleteDialogOpen(true);
   };
 
   const eksekusiHapus = () => {
     if (idYangDihapus) {
-      const dataBaru = invoices.filter(
-        (item) => item.invoice !== idYangDihapus,
-      );
-      setInvoices(dataBaru);
-
-      if (dataTampil.length === 1 && halamanSaatIni > 1) {
+      deleteInvoice(idYangDihapus);
+      if (dataTampil.length === 1 && halamanSaatIni > 1)
         setHalamanSaatIni(halamanSaatIni - 1);
-      }
-      toast.success(`Invoice ${idYangDihapus} berhasil dihapus.`);
+      toast.success(`Invoice berhasil dihapus dari sistem.`);
     }
     setIsDeleteDialogOpen(false);
     setIdYangDihapus(null);
   };
 
-  const hitungTotalLayanan = (layananSaatIni: Service[]) => {
-    const total = layananSaatIni.reduce((acc, curr) => acc + curr.harga, 0);
+  const hitungTotalLayanan = (layananSaatIni: Service[]) =>
     setFormData({
       ...formData,
-      totalAmount: total.toString(),
+      totalAmount: layananSaatIni
+        .reduce((acc, curr) => acc + curr.harga, 0)
+        .toString(),
     });
-  };
 
   const tambahLayanan = (layanan: Service) => {
-    const daftarBaru = [...selectedServices, layanan];
-    setSelectedServices(daftarBaru);
-    hitungTotalLayanan(daftarBaru);
+    const baru = [...selectedServices, layanan];
+    setSelectedServices(baru);
+    hitungTotalLayanan(baru);
   };
 
-  const hapusLayanan = (indexDihapus: number) => {
-    const daftarBaru = selectedServices.filter(
-      (_, idx) => idx !== indexDihapus,
-    );
-    setSelectedServices(daftarBaru);
-    hitungTotalLayanan(daftarBaru);
-  };
-
-  const renderPaginationItems = () => {
-    const items = [];
-    const batasTampil = 5;
-
-    if (totalHalaman <= batasTampil) {
-      for (let i = 1; i <= totalHalaman; i++) items.push(i);
-    } else {
-      if (halamanSaatIni <= 3) {
-        items.push(1, 2, 3, 4, "ellipsis", totalHalaman);
-      } else if (halamanSaatIni >= totalHalaman - 2) {
-        items.push(
-          1,
-          "ellipsis",
-          totalHalaman - 3,
-          totalHalaman - 2,
-          totalHalaman - 1,
-          totalHalaman,
-        );
-      } else {
-        items.push(
-          1,
-          "ellipsis",
-          halamanSaatIni - 1,
-          halamanSaatIni,
-          halamanSaatIni + 1,
-          "ellipsis",
-          totalHalaman,
-        );
-      }
-    }
-
-    return items.map((item, index) => {
-      if (item === "ellipsis") {
-        return (
-          <PaginationItem key={`ellipsis-${index}`}>
-            <PaginationEllipsis />
-          </PaginationItem>
-        );
-      }
-      return (
-        <PaginationItem key={item}>
-          <PaginationLink
-            href="#"
-            isActive={halamanSaatIni === item}
-            onClick={(e) => {
-              e.preventDefault();
-              setHalamanSaatIni(item as number);
-            }}
-            className={
-              halamanSaatIni === item
-                ? "rounded-xl"
-                : "rounded-xl hover:bg-muted"
-            }
-          >
-            {item}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    });
+  const hapusLayanan = (index: number) => {
+    const baru = selectedServices.filter((_, idx) => idx !== index);
+    setSelectedServices(baru);
+    hitungTotalLayanan(baru);
   };
 
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -482,101 +307,127 @@ export default function TransactionPage() {
         </p>
       </div>
 
-      {/* OVERVIEW CARDS (METRIK) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1 col-span-2 md:col-span-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm col-span-2 md:col-span-1">
           <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
             <Receipt className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {invoices.length}
-          </div>
+          <div className="text-3xl font-bold">{invoices.length}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Total Transaksi
           </div>
         </div>
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{dataLunas}</div>
+          <div className="text-2xl font-bold">{dataLunas}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Berhasil Lunas
+            Lunas
           </div>
         </div>
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
             <Clock className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {dataPending}
-          </div>
+          <div className="text-2xl font-bold">{dataPending}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Pending
           </div>
         </div>
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {dataBelumBayar}
-          </div>
+          <div className="text-2xl font-bold">{dataBelumBayar}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Belum Bayar
           </div>
         </div>
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-red-500/10 text-red-500 rounded-xl shrink-0 w-fit mb-3">
             <XCircle className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{dataGagal}</div>
+          <div className="text-2xl font-bold">{dataGagal}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Gagal Transaksi
+            Gagal
           </div>
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
-          <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
+          <div className="flex flex-1 gap-3">
             <div className="relative md:max-w-xs w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Cari nomor invoice / klien..."
+                placeholder="Cari ID invoice atau klien..."
                 value={kataKunci}
                 onChange={(e) => {
                   setKataKunci(e.target.value);
                   setHalamanSaatIni(1);
                 }}
-                className="pl-9 rounded-xl w-full"
+                className="pl-9 rounded-xl w-full h-10 border-border/50"
               />
             </div>
-            <Select
-              value={filterStatus}
-              onValueChange={(val) => {
-                setFilterStatus(val);
-                setHalamanSaatIni(1);
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[180px] rounded-xl">
-                <SelectValue placeholder="Filter Status" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="Semua">Semua Status</SelectItem>
-                <SelectItem value="Lunas">Lunas</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Belum Bayar">Belum Bayar</SelectItem>
-                <SelectItem value="Gagal">Gagal</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover open={openFilterStatus} onOpenChange={setOpenFilterStatus}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openFilterStatus}
+                  className="w-[180px] justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                >
+                  <span className="truncate">{filterStatus}</span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[180px] p-0 rounded-xl shadow-lg border-border/60"
+                align="end"
+              >
+                <Command>
+                  <CommandList>
+                    <CommandEmpty>Status tidak ditemukan.</CommandEmpty>
+                    <CommandGroup>
+                      {[
+                        "Semua",
+                        "Lunas",
+                        "Pending",
+                        "Belum Bayar",
+                        "Gagal",
+                      ].map((status) => (
+                        <CommandItem
+                          key={status}
+                          onSelect={() => {
+                            setFilterStatus(status);
+                            setHalamanSaatIni(1);
+                            setOpenFilterStatus(false);
+                          }}
+                          className="rounded-lg cursor-pointer my-0.5 font-medium"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-primary shrink-0",
+                              filterStatus === status
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">{status}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
+            className="rounded-xl gap-2 shadow-sm font-semibold h-10"
           >
-            <Plus className="w-4 h-4" /> Tambah Data
+            <Plus className="w-4 h-4" /> Tambah Transaksi
           </Button>
         </div>
 
@@ -584,265 +435,185 @@ export default function TransactionPage() {
           <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-56 font-semibold">
-                  Invoice / Klien
-                </TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="font-semibold">Metode</TableHead>
-                <TableHead className="font-semibold">Tanggal / Batas</TableHead>
-                <TableHead className="text-right font-semibold">
-                  Total
-                </TableHead>
-                <TableHead className="text-center w-32 font-semibold">
-                  Aksi
-                </TableHead>
+                <TableHead>Invoice / Klien</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Metode</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-center">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dataTampil.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center h-32 text-muted-foreground"
+              {dataTampil.map((invoice: any) => (
+                <React.Fragment key={invoice.invoice}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-muted/40 transition-colors group"
+                    onClick={() => toggleRow(invoice.invoice)}
                   >
-                    Tidak ada data ditemukan.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                dataTampil.map((invoice) => (
-                  <React.Fragment key={invoice.invoice}>
-                    <TableRow
-                      className="cursor-pointer hover:bg-muted/40 transition-colors group"
-                      onClick={() => toggleRow(invoice.invoice)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`p-1.5 rounded-md shrink-0 transition-colors ${expandedRow === invoice.invoice ? "bg-primary/10 text-primary" : "bg-transparent text-muted-foreground group-hover:bg-muted"}`}
-                          >
-                            {expandedRow === invoice.invoice ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-bold text-foreground">
-                              {invoice.invoice}
-                            </div>
-                            <div className="text-xs text-muted-foreground max-w-[150px] truncate mt-0.5">
-                              {invoice.clientName}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            invoice.paymentStatus === "Lunas"
-                              ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400 border-0 shadow-none font-semibold"
-                              : invoice.paymentStatus === "Pending"
-                                ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400 border-0 shadow-none font-semibold"
-                                : invoice.paymentStatus === "Belum Bayar"
-                                  ? "bg-sky-500/15 text-sky-700 hover:bg-sky-500/25 dark:text-sky-400 border-0 shadow-none font-semibold"
-                                  : "bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400 border-0 shadow-none font-semibold"
-                          }
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-1.5 rounded-md ${expandedRow === invoice.invoice ? "bg-primary/10 text-primary" : "text-muted-foreground group-hover:bg-muted"}`}
                         >
-                          {invoice.paymentStatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{invoice.paymentMethod}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium">
-                          {invoice.date}
+                          {expandedRow === invoice.invoice ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          Batas: {invoice.dueDate}
+                        <div>
+                          <div className="font-bold">{invoice.invoice}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {invoice.clientName}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-foreground">
-                        {convertAndFormat(
-                          parseCurrencyToNumber(invoice.totalAmount),
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className={cn(
+                          "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border",
+                          invoice.paymentStatus === "Lunas"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            : invoice.paymentStatus === "Pending"
+                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                              : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20",
                         )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              bukaFormEdit(invoice);
-                            }}
-                            className="h-8 w-8 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950"
-                            title="Edit"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              konfirmasiHapus(invoice.invoice);
-                            }}
-                            className="h-8 w-8 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950"
-                            title="Hapus"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-
-                    {expandedRow === invoice.invoice && (
-                      <TableRow className="bg-muted/10 hover:bg-muted/10">
-                        <TableCell colSpan={6} className="p-0 border-b">
-                          <div className="p-5 pl-12 border-l-4 border-l-primary mx-4 my-3 bg-card rounded-r-xl shadow-sm border border-border/50">
-                            <h4 className="font-bold text-sm mb-4 flex items-center gap-2">
-                              <Receipt className="w-4 h-4 text-primary" />{" "}
-                              Rincian Layanan Tertagih
-                            </h4>
-                            {invoice.services && invoice.services.length > 0 ? (
-                              <div className="flex flex-col gap-3 max-w-3xl">
-                                {invoice.services.map((svc, idx) => (
+                      >
+                        {invoice.paymentStatus}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                        <Wallet className="w-3 h-3" />{" "}
+                        {invoice.paymentMethod || "Transfer"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{invoice.date}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Batas: {invoice.dueDate}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {convertAndFormatCurrency(
+                        parseCurrencyToNumber(invoice.totalAmount),
+                        mataUang,
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            bukaFormEdit(invoice);
+                          }}
+                          className="h-8 w-8 text-blue-600 hover:bg-blue-100"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIdYangDihapus(invoice.id);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="h-8 w-8 text-red-600 hover:bg-red-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {expandedRow === invoice.invoice && (
+                    <TableRow className="bg-muted/10 border-b-0">
+                      <TableCell colSpan={6} className="p-0 border-b">
+                        <div className="p-5 pl-12 border-l-4 border-l-primary mx-4 my-3 bg-card rounded-r-xl shadow-sm border border-border/50">
+                          <h4 className="font-bold text-sm mb-4 flex items-center gap-2">
+                            <Receipt className="w-4 h-4 text-primary" /> Rincian
+                            Layanan Tertagih
+                          </h4>
+                          {invoice.services?.length ? (
+                            <div className="flex flex-col gap-3 max-w-3xl">
+                              {invoice.services.map(
+                                (svc: Service, idx: number) => (
                                   <div
                                     key={idx}
                                     className="flex justify-between items-center bg-muted/30 border border-border/50 rounded-xl p-3.5 text-sm"
                                   >
                                     <div>
-                                      <p className="font-semibold text-foreground">
+                                      <p className="font-semibold">
                                         {svc.nama}
                                       </p>
                                       <p className="text-xs text-muted-foreground mt-1">
                                         {svc.deskripsi}
                                       </p>
                                     </div>
-                                    <p className="font-bold shrink-0 bg-background px-3 py-1.5 rounded-lg border shadow-sm">
-                                      {convertAndFormat(svc.harga)}
+                                    <p className="font-bold bg-background px-3 py-1.5 rounded-lg border shadow-sm">
+                                      {convertAndFormatCurrency(
+                                        svc.harga,
+                                        mataUang,
+                                      )}
                                     </p>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="bg-muted/30 border border-dashed rounded-xl p-4 text-center">
-                                <p className="text-sm text-muted-foreground italic">
-                                  Tidak ada data rincian layanan yang
-                                  dilampirkan pada invoice ini.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
-                ))
-              )}
+                                ),
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground italic">
+                              Tidak ada rincian layanan.
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
+              ))}
             </TableBody>
           </Table>
         </div>
 
-        {totalHalaman > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
-              <span>Tampilkan</span>
-              <Select
-                value={itemPerHalaman.toString()}
-                onValueChange={(val) => {
-                  setItemPerHalaman(Number(val));
-                  setHalamanSaatIni(1);
-                }}
-              >
-                <SelectTrigger className="w-[70px] h-7 rounded-md border-0 bg-transparent shadow-none focus:ring-0 px-1 font-semibold text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
-              <span>data</span>
-            </div>
-
-            <Pagination className="w-auto mx-0">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni > 1)
-                        setHalamanSaatIni(halamanSaatIni - 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni === 1
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-                {renderPaginationItems()}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni < totalHalaman)
-                        setHalamanSaatIni(halamanSaatIni + 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni >= totalHalaman
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
+        <CustomPagination
+          halamanSaatIni={halamanSaatIni}
+          setHalamanSaatIni={setHalamanSaatIni}
+          totalHalaman={totalHalaman}
+          itemPerHalaman={itemPerHalaman}
+          setItemPerHalaman={setItemPerHalaman}
+        />
       </div>
 
-      {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT)
-      ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
-          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
-          <div className="p-6">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl font-bold">
-                {formMode === "tambah"
-                  ? "Buat Invoice Baru"
-                  : "Ubah Data Invoice"}
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                {formMode === "tambah"
-                  ? "Lengkapi formulir di bawah. Total nominal akan dihitung otomatis saat layanan ditambahkan."
-                  : "Sesuaikan kembali rincian data transaksi yang sudah ada."}
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[650px] sm:rounded-[1.5rem] p-0 overflow-hidden border border-border/50 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60 shrink-0"></div>
 
-            <div className="grid gap-5 py-2 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="text-2xl font-bold tracking-tight">
+              {formMode === "tambah"
+                ? "Buat Invoice Baru"
+                : "Ubah Data Invoice"}
+            </DialogTitle>
+            <DialogDescription>
+              Isi parameter transaksi dan detail penagihan untuk dicatat ke
+              dalam sistem.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="grid gap-2">
-                <Label htmlFor="invoice" className="font-semibold">
-                  Nomor Invoice
-                </Label>
+                <Label className="font-semibold">Nomor Invoice</Label>
                 <Input
-                  id="invoice"
-                  placeholder="INV-YYYYMMDD-XXX"
+                  placeholder="Contoh: INV-..."
                   value={formData.invoice}
                   onChange={(e) =>
                     setFormData({ ...formData, invoice: e.target.value })
                   }
-                  className="rounded-xl uppercase bg-muted/50 font-medium h-10"
+                  className="rounded-xl uppercase bg-muted/20 font-medium h-10 border-border/50"
                   disabled={formMode === "edit"}
                 />
               </div>
@@ -858,11 +629,13 @@ export default function TransactionPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={openComboboxKlien}
-                      className="w-full justify-between font-normal rounded-xl h-10"
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/50"
                     >
-                      {formData.clientName
-                        ? formData.clientName
-                        : "Pilih atau cari dari database..."}
+                      {formData.clientName || (
+                        <span className="text-muted-foreground">
+                          Pilih klien...
+                        </span>
+                      )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -871,35 +644,24 @@ export default function TransactionPage() {
                     align="start"
                   >
                     <Command>
-                      <CommandInput
-                        placeholder="Cari nama klien..."
-                        className="rounded-t-xl"
-                      />
+                      <CommandInput placeholder="Cari klien yang terdaftar..." />
                       <CommandList>
-                        <CommandEmpty>
-                          Database klien tidak ditemukan.
-                        </CommandEmpty>
+                        <CommandEmpty>Klien tidak ditemukan.</CommandEmpty>
                         <CommandGroup>
-                          {daftarKlien.map((klien, index) => (
+                          {daftarKlien.map((klien, i) => (
                             <CommandItem
-                              key={index}
-                              value={klien.name}
-                              onSelect={(currentValue) => {
-                                const dataTerpilih = daftarKlien.find(
-                                  (k) => k.name.toLowerCase() === currentValue,
+                              key={i}
+                              onSelect={(val) => {
+                                const dat = daftarKlien.find(
+                                  (k) => k.name.toLowerCase() === val,
                                 );
                                 setFormData({
                                   ...formData,
-                                  clientName: dataTerpilih
-                                    ? dataTerpilih.name
-                                    : currentValue,
-                                  clientEmail: dataTerpilih
-                                    ? dataTerpilih.email
-                                    : "",
+                                  clientName: dat?.name || val,
+                                  clientEmail: dat?.email || "",
                                 });
                                 setOpenComboboxKlien(false);
                               }}
-                              className="cursor-pointer"
                             >
                               <Check
                                 className={cn(
@@ -909,14 +671,7 @@ export default function TransactionPage() {
                                     : "opacity-0",
                                 )}
                               />
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {klien.name}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {klien.email}
-                                </span>
-                              </div>
+                              {klien.name}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -924,186 +679,315 @@ export default function TransactionPage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
-                {formData.clientEmail && (
-                  <p className="text-xs text-muted-foreground mt-0.5 ml-1">
-                    Email: {formData.clientEmail}
-                  </p>
-                )}
               </div>
+            </div>
 
-              {/* TANGGAL DIBUAT & JATUH TEMPO MENGGUNAKAN SHADCN INPUT & LABEL */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="grid gap-2">
-                  <Label className="font-semibold">Tanggal Dibuat</Label>
-                  <Popover
-                    onOpenChange={(open) => {
-                      // Saat popover dibuka, paksa bulan kalender sesuai dengan tanggal yang terpilih
-                      if (open && formData.date)
-                        setBulanTanggalDibuat(
-                          new Date(formData.date.replace(/-/g, "/")),
-                        );
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal rounded-xl h-10",
-                          !formData.date && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.date ? (
-                          format(new Date(formData.date), "PPP")
-                        ) : (
-                          <span>Pilih tanggal</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          formData.date ? new Date(formData.date) : undefined
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid gap-2">
+                <Label className="font-semibold">Tanggal Dibuat</Label>
+                <Popover
+                  onOpenChange={(open) => {
+                    if (open && formData.date)
+                      setBulanTanggalDibuat(
+                        new Date(formData.date.replace(/-/g, "/")),
+                      );
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal rounded-xl h-10 border-border/50",
+                        !formData.date && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.date ? (
+                        format(new Date(formData.date), "PPP", { locale: id })
+                      ) : (
+                        <span>Pilih tanggal</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 rounded-xl">
+                    <Calendar
+                      mode="single"
+                      selected={
+                        formData.date ? new Date(formData.date) : undefined
+                      }
+                      month={bulanTanggalDibuat}
+                      onMonthChange={setBulanTanggalDibuat}
+                      onSelect={(date) => {
+                        if (date) {
+                          const y = date.getFullYear(),
+                            m = String(date.getMonth() + 1).padStart(2, "0"),
+                            d = String(date.getDate()).padStart(2, "0");
+                          handleTanggalDibuatChange({
+                            target: { value: `${y}-${m}-${d}` },
+                          } as any);
                         }
-                        month={bulanTanggalDibuat} // <--- KUNCI: Paksa kalender menampilkan bulan ini
-                        onMonthChange={setBulanTanggalDibuat} // <--- Agar saat klik panah bulan tetap berpindah
-                        onSelect={(date) => {
-                          if (date) {
-                            // Pastikan formatnya benar-benar lokal
-                            const y = date.getFullYear();
-                            const m = String(date.getMonth() + 1).padStart(
-                              2,
-                              "0",
-                            );
-                            const d = String(date.getDate()).padStart(2, "0");
-                            const value = `${y}-${m}-${d}`;
-
-                            // Panggil handle yang sudah diperbaiki tadi
-                            handleTanggalDibuatChange({
-                              target: { value },
-                            } as any);
-                          }
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-semibold text-rose-500">
-                    Jatuh Tempo (Net 14)
-                  </Label>
-                  <Popover
-                    onOpenChange={(open) => {
-                      // Saat popover dibuka, paksa bulan kalender sesuai dengan tanggal yang terpilih
-                      if (open && formData.dueDate)
-                        setBulanJatuhTempo(
-                          new Date(formData.dueDate.replace(/-/g, "/")),
-                        );
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal rounded-xl h-10 bg-rose-500/5",
-                          !formData.dueDate && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4 text-rose-500" />
-                        {formData.dueDate ? (
-                          format(new Date(formData.dueDate), "PPP")
-                        ) : (
-                          <span>Pilih tanggal</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 rounded-xl">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          formData.dueDate
-                            ? new Date(formData.dueDate)
-                            : undefined
-                        }
-                        month={bulanJatuhTempo} // <--- KUNCI: Paksa kalender menampilkan bulan ini
-                        onMonthChange={setBulanJatuhTempo} // <--- Agar saat klik panah bulan tetap berpindah
-                        onSelect={(date) => {
-                          if (date) {
-                            // Pastikan formatnya benar-benar lokal
-                            const y = date.getFullYear();
-                            const m = String(date.getMonth() + 1).padStart(
-                              2,
-                              "0",
-                            );
-                            const d = String(date.getDate()).padStart(2, "0");
-                            const value = `${y}-${m}-${d}`;
-
-                            // Panggil handle yang sudah diperbaiki tadi
-                            handleTanggalDibuatChange({
-                              target: { value },
-                            } as any);
-                          }
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-
-              <div className="grid gap-2 p-4 rounded-xl border bg-muted/10 border-dashed">
-                <Label className="font-semibold text-primary flex items-center gap-2">
-                  <Receipt className="w-4 h-4" /> Daftar Layanan Tertagih
+              <div className="space-y-2">
+                <Label className="font-semibold text-rose-500">
+                  Jatuh Tempo (Net 14)
                 </Label>
                 <Popover
-                  open={openComboboxLayanan}
-                  onOpenChange={setOpenComboboxLayanan}
+                  onOpenChange={(open) => {
+                    if (open && formData.dueDate)
+                      setBulanJatuhTempo(
+                        new Date(formData.dueDate.replace(/-/g, "/")),
+                      );
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal rounded-xl h-10 bg-rose-500/5 border-rose-500/30",
+                        !formData.dueDate && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-rose-500" />
+                      {formData.dueDate ? (
+                        <span className="text-rose-600 font-medium">
+                          {format(new Date(formData.dueDate), "PPP", {
+                            locale: id,
+                          })}
+                        </span>
+                      ) : (
+                        <span>Pilih tanggal</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 rounded-xl">
+                    <Calendar
+                      mode="single"
+                      selected={
+                        formData.dueDate
+                          ? new Date(formData.dueDate)
+                          : undefined
+                      }
+                      month={bulanJatuhTempo}
+                      onMonthChange={setBulanJatuhTempo}
+                      onSelect={(date) => {
+                        if (date) {
+                          const y = date.getFullYear(),
+                            m = String(date.getMonth() + 1).padStart(2, "0"),
+                            d = String(date.getDate()).padStart(2, "0");
+                          handleTanggalDibuatChange({
+                            target: { value: `${y}-${m}-${d}` },
+                          } as any);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* DAFTAR LAYANAN - Improved UI */}
+            <div className="grid gap-4 p-5 rounded-2xl border border-border/60 bg-muted/5">
+              <Label className="font-bold text-primary flex items-center gap-2">
+                <Receipt className="w-4 h-4" /> Item / Layanan Tertagih
+              </Label>
+              <Popover
+                open={openComboboxLayanan}
+                onOpenChange={setOpenComboboxLayanan}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal text-muted-foreground rounded-xl h-10 bg-background border-dashed border-border/80 hover:border-primary/50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Sisipkan layanan dari
+                      katalog...
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl"
+                  align="start"
+                >
+                  <Command>
+                    <CommandInput placeholder="Cari nama layanan..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        Katalog layanan tidak ditemukan.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {dataLayanan.map((lay) => (
+                          <CommandItem
+                            key={lay.id}
+                            onSelect={() => {
+                              tambahLayanan(lay);
+                              setOpenComboboxLayanan(false);
+                            }}
+                          >
+                            <div className="flex justify-between w-full">
+                              <span className="font-medium">{lay.nama}</span>
+                              <span className="text-xs bg-muted px-2 py-1 rounded-md font-bold">
+                                {convertAndFormatCurrency(lay.harga, mataUang)}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {selectedServices.length > 0 && (
+                <div className="flex flex-col gap-2.5 mt-2">
+                  {selectedServices.map((lay, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-background px-4 py-3 rounded-xl border border-border/50 shadow-sm"
+                    >
+                      <span className="font-semibold text-sm">{lay.nama}</span>
+                      <div className="flex gap-4 items-center">
+                        <span className="font-bold text-sm text-muted-foreground">
+                          {convertAndFormatCurrency(lay.harga, mataUang)}
+                        </span>
+                        <button
+                          onClick={() => hapusLayanan(idx)}
+                          className="text-muted-foreground/50 hover:text-red-500 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* STATUS & METODE */}
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="grid gap-2">
+                <Label className="font-semibold text-foreground/90">
+                  Status Pembayaran
+                </Label>
+                <Popover
+                  open={openComboboxStatus}
+                  onOpenChange={setOpenComboboxStatus}
                 >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
-                      aria-expanded={openComboboxLayanan}
-                      className="w-full justify-between font-normal text-muted-foreground rounded-xl mt-2 h-10 bg-background hover:bg-background/80"
+                      aria-expanded={openComboboxStatus}
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
                     >
-                      <span className="flex items-center gap-2">
-                        <Plus className="w-4 h-4" /> Sisipkan layanan dari
-                        katalog...
-                      </span>
+                      {formData.paymentStatus || (
+                        <span className="text-muted-foreground">
+                          Pilih status...
+                        </span>
+                      )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl"
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg border-border/60"
                     align="start"
                   >
                     <Command>
-                      <CommandInput
-                        placeholder="Cari katalog layanan..."
-                        className="rounded-t-xl"
-                      />
                       <CommandList>
-                        <CommandEmpty>Layanan tidak ditemukan.</CommandEmpty>
+                        <CommandEmpty>Status tidak ditemukan.</CommandEmpty>
                         <CommandGroup>
-                          {dataLayanan.map((layanan) => (
+                          {["Lunas", "Pending", "Belum Bayar", "Gagal"].map(
+                            (status) => (
+                              <CommandItem
+                                key={status}
+                                onSelect={() => {
+                                  setFormData({
+                                    ...formData,
+                                    paymentStatus: status,
+                                  });
+                                  setOpenComboboxStatus(false);
+                                }}
+                                className="rounded-lg cursor-pointer my-0.5 font-medium"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4 text-primary",
+                                    formData.paymentStatus === status
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                {status}
+                              </CommandItem>
+                            ),
+                          )}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="font-semibold text-foreground/90">
+                  Metode Transaksi
+                </Label>
+                <Popover
+                  open={openComboboxMetode}
+                  onOpenChange={setOpenComboboxMetode}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openComboboxMetode}
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                    >
+                      {formData.paymentMethod || (
+                        <span className="text-muted-foreground">
+                          Pilih metode...
+                        </span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg border-border/60"
+                    align="start"
+                  >
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>Metode tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {["Transfer Bank", "GoPay", "QRIS"].map((metode) => (
                             <CommandItem
-                              key={layanan.id}
+                              key={metode}
                               onSelect={() => {
-                                tambahLayanan(layanan);
-                                setOpenComboboxLayanan(false);
+                                setFormData({
+                                  ...formData,
+                                  paymentMethod: metode,
+                                });
+                                setOpenComboboxMetode(false);
                               }}
-                              className="cursor-pointer"
+                              className="rounded-lg cursor-pointer my-0.5 font-medium"
                             >
-                              <div className="flex justify-between items-center w-full">
-                                <span className="font-medium">
-                                  {layanan.nama}
-                                </span>
-                                <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-md">
-                                  {convertAndFormat(layanan.harga)}
-                                </span>
-                              </div>
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-primary",
+                                  formData.paymentMethod === metode
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {metode}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -1111,177 +995,63 @@ export default function TransactionPage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
-
-                {selectedServices.length > 0 && (
-                  <div className="flex flex-col gap-2 mt-3">
-                    {selectedServices.map((layanan, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-background p-3 rounded-xl text-sm border shadow-sm group"
-                      >
-                        <span className="truncate pr-2 font-medium">
-                          {layanan.nama}
-                        </span>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="font-bold text-xs bg-muted/50 px-2 py-1 rounded-md">
-                            {convertAndFormat(layanan.harga)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => hapusLayanan(idx)}
-                            className="text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1.5 rounded-lg transition-colors cursor-pointer"
-                            title="Hapus layanan"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="status" className="font-semibold">
-                    Status
-                  </Label>
-                  <Select
-                    value={formData.paymentStatus}
-                    onValueChange={(val) =>
-                      setFormData({ ...formData, paymentStatus: val })
-                    }
-                  >
-                    <SelectTrigger
-                      id="status"
-                      className="w-full rounded-xl h-10"
-                    >
-                      <SelectValue placeholder="Pilih Status" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Lunas">Lunas</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="Belum Bayar">Belum Bayar</SelectItem>
-                      <SelectItem value="Gagal">Gagal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="metode" className="font-semibold">
-                    Metode Transaksi
-                  </Label>
-                  <Select
-                    value={formData.paymentMethod}
-                    onValueChange={(val) =>
-                      setFormData({ ...formData, paymentMethod: val })
-                    }
-                  >
-                    <SelectTrigger
-                      id="metode"
-                      className="w-full rounded-xl h-10"
-                    >
-                      <SelectValue placeholder="Pilih Metode" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Transfer Bank">
-                        Transfer Bank
-                      </SelectItem>
-                      <SelectItem value="GoPay">GoPay</SelectItem>
-                      <SelectItem value="Kartu Kredit">Kartu Kredit</SelectItem>
-                      <SelectItem value="OVO">OVO</SelectItem>
-                      <SelectItem value="Dana">Dana</SelectItem>
-                      <SelectItem value="ShopeePay">ShopeePay</SelectItem>
-                      <SelectItem value="QRIS">QRIS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-2 pt-2">
-                <Label htmlFor="nominal" className="font-semibold">
-                  Nominal Penagihan Akhir
-                </Label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70 pointer-events-none select-none">
-                    {mataUang === "USD" ? "$" : "Rp"}
-                  </div>
-                  <Input
-                    id="nominal"
-                    type="number"
-                    placeholder="0"
-                    value={parseCurrencyToNumber(formData.totalAmount) || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        totalAmount: e.target.value,
-                      })
-                    }
-                    className="rounded-xl pl-10 pr-4 h-10 font-bold font-mono text-base"
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground/80 pl-1 leading-relaxed mt-0.5">
-                  * Nominal terkalkulasi dari layanan terpilih, atau sesuaikan
-                  secara manual tanpa pemisah ribuan.
-                </p>
               </div>
             </div>
 
-            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl w-full sm:w-auto font-medium"
-              >
-                Batalkan
-              </Button>
-              <Button
-                onClick={handleSimpan}
-                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Transaksi
-              </Button>
-            </DialogFooter>
+            <div className="grid gap-2">
+              <Label className="font-semibold text-base">
+                Nominal Penagihan Akhir
+              </Label>
+              <div className="relative flex items-center">
+                <div className="absolute left-4 text-sm font-bold text-muted-foreground/70">
+                  {mataUang === "USD" ? "$" : "Rp"}
+                </div>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={parseCurrencyToNumber(formData.totalAmount) || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, totalAmount: e.target.value })
+                  }
+                  className="rounded-xl pl-11 h-12 font-bold font-mono text-lg border-border/60 shadow-sm"
+                />
+              </div>
+            </div>
           </div>
+
+          <DialogFooter className="px-6 pt-4 pb-8 border-t border-border/50 bg-muted/10 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-xl font-medium h-10"
+            >
+              Batalkan
+            </Button>
+            <Button
+              onClick={handleSimpan}
+              className="rounded-xl shadow-md font-bold h-10"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Transaksi
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ==========================================
-          ALERT DIALOG DELETE
-      ========================================== */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent className="sm:rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-500">
-              <AlertCircle className="w-5 h-5" />
-              Hapus Data Transaksi?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm mt-2">
-              Tindakan ini tidak dapat dibatalkan. Menghapus invoice{" "}
-              <strong className="text-foreground">{idYangDihapus}</strong> akan
-              menghilangkan riwayat transaksi ini dari database sistem
-              selamanya.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <AlertDialogCancel
-              onClick={() => setIdYangDihapus(null)}
-              className="rounded-xl w-full sm:w-auto mt-0"
-            >
-              Batal
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl w-full sm:w-auto shadow-md"
-            >
-              Ya, Hapus Permanen
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteModal
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setIdYangDihapus(null);
+        }}
+        onConfirm={eksekusiHapus}
+        title="Hapus Data Transaksi?"
+        description={
+          <>
+            Tindakan ini tidak dapat dibatalkan. Transaksi ini akan
+            menghilangkan riwayatnya dari sistem selamanya.
+          </>
+        }
+      />
     </div>
   );
 }

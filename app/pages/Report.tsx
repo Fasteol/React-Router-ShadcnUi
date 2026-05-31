@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import {
   Card,
@@ -27,7 +27,6 @@ import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { toast } from "sonner";
-import { dataAwal } from "~/data/invoices";
 
 // IMPORT ICONS
 import {
@@ -41,60 +40,23 @@ import {
   FileText,
   Calendar,
   Activity,
+  TrendingDown,
 } from "lucide-react";
 
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
-
-const parseCurrencyToNumber = (currencyString: string) => {
-  return parseInt(currencyString.replace(/[^0-9]/g, ""), 10) || 0;
-};
-
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
+// IMPORT UTILITIES & HOOK GLOBAL
+import {
+  convertAndFormatCurrency,
+  parseCurrencyToNumber,
+} from "~/lib/currency";
+import { useAppStore } from "~/store/useAppStore";
 
 export default function ReportsPage() {
   const [periodeExport, setPeriodeExport] = useState("all");
   const [formatExport, setFormatExport] = useState("pdf");
 
-  // ==========================================
-  // STATE MATA UANG & INFORMASI PERUSAHAAN
-  // ==========================================
-  const [mataUang, setMataUang] = useState("IDR");
-  const [infoBisnis, setInfoBisnis] = useState({
-    nama: "Internal Sistem",
-    alamat: "Semua Wilayah",
-  });
-
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-      if (parsed?.perusahaan?.nama) {
-        setInfoBisnis({
-          nama: parsed.perusahaan.nama || "Perusahaan Anonim",
-          alamat: parsed.perusahaan.alamat || "Alamat belum diatur",
-        });
-      }
-    }
-  }, []);
-
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
+  // AMBIL DATA DARI ZUSTAND GLOBAL STORE
+  const { preferensi, infoBisnis, invoices, expenses } = useAppStore();
+  const mataUang = preferensi.mataUang;
 
   const getPeriodeLabel = (val: string) => {
     switch (val) {
@@ -110,11 +72,13 @@ export default function ReportsPage() {
   };
 
   // ==========================================
-  // KALKULASI & FILTER DATA STATISTIK
+  // KALKULASI & FILTER DATA STATISTIK (DINAMIS)
   // ==========================================
   const stats = useMemo(() => {
     let totalPendapatan = 0;
     let totalTertunda = 0;
+    let totalPengeluaran = 0;
+
     let countLunas = 0;
     let countPending = 0;
     let countBelumBayar = 0;
@@ -128,18 +92,16 @@ export default function ReportsPage() {
     > = {};
     const klienUnik = new Set<string>();
 
-    const dataTerfilter = dataAwal.filter((inv) => {
+    // 1. FILTER INVOICES (PENDAPATAN)
+    const dataTerfilter = invoices.filter((inv) => {
       if (periodeExport === "all") return true;
 
-      // @ts-ignore
-      const invDate = new Set([inv.date, (inv as any).tanggal]).has(undefined)
-        ? new Date()
-        : new Date(
-            (inv as any).date ||
-              (inv as any).invoiceDate ||
-              (inv as any).tanggal,
-          );
+      // Ambil tanggal invoice
+      const tglString =
+        inv.date || (inv as any).invoiceDate || (inv as any).tanggal;
+      if (!tglString) return false;
 
+      const invDate = new Date(tglString);
       const sekarang = new Date();
 
       switch (periodeExport) {
@@ -191,8 +153,10 @@ export default function ReportsPage() {
           break;
       }
 
-      popularitasMetode[inv.paymentMethod] =
-        (popularitasMetode[inv.paymentMethod] || 0) + 1;
+      if (inv.paymentMethod) {
+        popularitasMetode[inv.paymentMethod] =
+          (popularitasMetode[inv.paymentMethod] || 0) + 1;
+      }
 
       if (inv.services && Array.isArray(inv.services)) {
         inv.services.forEach((svc) => {
@@ -205,11 +169,51 @@ export default function ReportsPage() {
       }
     });
 
+    // 2. FILTER PENGELUARAN (EXPENSES)
+    const dataPengeluaranTerfilter = expenses.filter((exp) => {
+      if (periodeExport === "all") return true;
+      if (!exp.tanggal) return false;
+
+      const expDate = new Date(exp.tanggal);
+      const sekarang = new Date();
+
+      switch (periodeExport) {
+        case "last_30": {
+          const batas30Hari = new Date();
+          batas30Hari.setDate(sekarang.getDate() - 30);
+          return expDate >= batas30Hari && expDate <= sekarang;
+        }
+        case "q1_2026": {
+          return (
+            expDate.getFullYear() === 2026 &&
+            expDate.getMonth() >= 0 &&
+            expDate.getMonth() <= 2
+          );
+        }
+        case "q2_2026": {
+          return (
+            expDate.getFullYear() === 2026 &&
+            expDate.getMonth() >= 3 &&
+            expDate.getMonth() <= 5
+          );
+        }
+        default:
+          return true;
+      }
+    });
+
+    dataPengeluaranTerfilter.forEach((exp) => {
+      if (exp.status === "Dibayar") {
+        totalPengeluaran += Number(exp.jumlah);
+      }
+    });
+
     const totalInvoices = dataTerfilter.length || 1;
     const rataRataTransaksi = countLunas > 0 ? totalPendapatan / countLunas : 0;
     const totalTagihanBerjalan = countLunas + countPending + countBelumBayar;
     const collectionRate =
       totalTagihanBerjalan > 0 ? (countLunas / totalTagihanBerjalan) * 100 : 0;
+    const labaBersih = totalPendapatan - totalPengeluaran;
 
     const topKlien = Object.entries(pendapatanKlien)
       .map(([nama, total]) => ({ nama, total }))
@@ -233,6 +237,8 @@ export default function ReportsPage() {
     return {
       totalPendapatan,
       totalTertunda,
+      totalPengeluaran,
+      labaBersih,
       totalInvoices: dataTerfilter.length,
       totalKlienAktif: klienUnik.size,
       rataRataTransaksi,
@@ -253,30 +259,30 @@ export default function ReportsPage() {
       topMetode,
       topLayanan,
       rawDataTerfilter: dataTerfilter,
+      rawPengeluaranTerfilter: dataPengeluaranTerfilter,
     };
-  }, [periodeExport]);
+  }, [periodeExport, invoices, expenses]); // Ditambahkan ke dependency array
 
   // ==========================================
-  // HANDLER EKSPOR DATA (EXCEL & VECTOR PDF)
+  // HANDLER EKSPOR DATA (EXCEL & PDF VECTOR)
   // ==========================================
   const handleExport = () => {
     if (formatExport === "excel") {
       toast.info("Menyiapkan dokumen Excel...");
+      const workbook = XLSX.utils.book_new();
 
+      // SHEET 1: INVOICES
       const excelRows = stats.rawDataTerfilter.map((inv, idx) => ({
         No: idx + 1,
         "ID Invoice": inv.id || "-",
         "Nama Klien": inv.clientName,
-        Tanggal: (inv as any).date || "-",
-        "Tenggat Waktu": (inv as any).dueDate || "-",
-        "Metode Pembayaran": inv.paymentMethod,
+        Tanggal: inv.date || "-",
+        "Tenggat Waktu": inv.dueDate || "-",
+        "Metode Pembayaran": inv.paymentMethod || "-",
         Status: inv.paymentStatus,
         "Total Penagihan (Angka)": parseCurrencyToNumber(inv.totalAmount),
       }));
-
       const worksheet = XLSX.utils.json_to_sheet(excelRows);
-      const workbook = XLSX.utils.book_new();
-
       worksheet["!cols"] = [
         { wch: 5 },
         { wch: 18 },
@@ -287,10 +293,35 @@ export default function ReportsPage() {
         { wch: 15 },
         { wch: 22 },
       ];
-
       XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Transaksi");
+
+      // SHEET 2: EXPENSES
+      const excelRowsExp = stats.rawPengeluaranTerfilter.map((exp, idx) => ({
+        No: idx + 1,
+        "ID Pengeluaran": exp.id || "-",
+        Kategori: exp.kategori,
+        Tanggal: exp.tanggal,
+        Status: exp.status,
+        "Total Biaya (Angka)": Number(exp.jumlah),
+      }));
+      const worksheetExp = XLSX.utils.json_to_sheet(excelRowsExp);
+      worksheetExp["!cols"] = [
+        { wch: 5 },
+        { wch: 15 },
+        { wch: 20 },
+        { wch: 35 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 20 },
+      ];
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheetExp,
+        "Laporan Pengeluaran",
+      );
+
       XLSX.writeFile(workbook, `Laporan_Finansial_${periodeExport}.xlsx`);
-      toast.success(`Laporan Excel berhasil diunduh!`);
+      toast.success(`Laporan Excel multi-sheet berhasil diunduh!`);
     } else if (formatExport === "pdf") {
       const printIframe = document.createElement("iframe");
       printIframe.style.position = "fixed";
@@ -321,11 +352,28 @@ export default function ReportsPage() {
               <td class="text-center text-muted">${idx + 1}</td>
               <td class="font-mono text-bold">${inv.id || inv.invoice || "-"}</td>
               <td class="font-semibold">${inv.clientName}</td>
-              <td class="text-muted">${inv.paymentMethod}</td>
-              <td class="text-center">
-                <span class="badge" style="${badgeStyle}">${inv.paymentStatus}</span>
-              </td>
-              <td class="text-right font-bold">${inv.totalAmount}</td>
+              <td class="text-muted">${inv.paymentMethod || "-"}</td>
+              <td class="text-center"><span class="badge" style="${badgeStyle}">${inv.paymentStatus}</span></td>
+              <td class="text-right font-bold">${convertAndFormatCurrency(parseCurrencyToNumber(inv.totalAmount), mataUang)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const barisTabelExpHtml = stats.rawPengeluaranTerfilter
+        .map((exp, idx) => {
+          let badgeStyle =
+            exp.status === "Dibayar"
+              ? "background: #d1fae5; color: #065f46;"
+              : "background: #f1f5f9; color: #475569;";
+          return `
+            <tr>
+              <td class="text-center text-muted">${idx + 1}</td>
+              <td class="font-mono text-bold">${exp.id}</td>
+              <td class="font-semibold">${exp.kategori}</td>
+              <td class="font-semibold">${exp.deskripsi}</td>
+              <td class="text-center"><span class="badge" style="${badgeStyle}">${exp.status}</span></td>
+              <td class="text-right font-bold" style="color: #be123c;">${convertAndFormatCurrency(Number(exp.jumlah), mataUang)}</td>
             </tr>
           `;
         })
@@ -335,37 +383,30 @@ export default function ReportsPage() {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Laporan Keuangan - ${infoBisnis.nama}</title>
+            <title>Laporan Keuangan - ${infoBisnis?.nama || "Perusahaan"}</title>
             <style>
               @page { size: A4; margin: 20mm; }
               * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; line-height: 1.5; background: #ffffff; }
-
-              /* HEADER */
               .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 24px; border-bottom: 2px solid #e2e8f0; margin-bottom: 32px; }
               .brand-name { font-size: 24px; font-weight: 800; color: #2563eb; letter-spacing: -0.5px; margin: 0 0 4px 0; text-transform: uppercase; }
               .brand-address { font-size: 11px; color: #64748b; max-width: 250px; line-height: 1.4; }
               .report-title { font-size: 20px; font-weight: 800; color: #0f172a; text-align: right; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: -0.5px;}
               .report-meta { font-size: 11px; color: #64748b; text-align: right; margin: 2px 0; }
-
-              /* METRICS */
               .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
               .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; border-top: 4px solid #cbd5e1; }
               .metric-card.success { border-top-color: #10b981; }
+              .metric-card.danger { border-top-color: #f43f5e; }
+              .metric-card.primary { border-top-color: #3b82f6; }
               .metric-card.warning { border-top-color: #f59e0b; }
-              .metric-card.info { border-top-color: #3b82f6; }
               .metric-title { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-              .metric-value { font-size: 18px; font-weight: 800; color: #0f172a; }
-
-              /* TABLE */
-              .section-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 16px; border-left: 4px solid #2563eb; padding-left: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-              .table-modern { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 40px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+              .metric-value { font-size: 14px; font-weight: 800; color: #0f172a; }
+              .section-title { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 16px; border-left: 4px solid #2563eb; padding-left: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 40px; }
+              .table-modern { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
               .table-modern th { background: #f8fafc; color: #475569; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 14px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
               .table-modern td { padding: 14px 12px; font-size: 11px; border-bottom: 1px solid #f1f5f9; color: #334155; }
               .table-modern tr:last-child td { border-bottom: none; }
               .table-modern tr:nth-child(even) td { background: #fafaf9; }
-
-              /* UTILITIES */
               .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
               .font-bold { font-weight: 700; color: #0f172a; }
               .font-semibold { font-weight: 600; color: #1e293b; }
@@ -373,20 +414,17 @@ export default function ReportsPage() {
               .text-right { text-align: right !important; }
               .text-center { text-align: center !important; }
               .text-muted { color: #64748b; }
-
-              /* FOOTER */
-              .footer { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; }
+              .footer { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; page-break-inside: avoid; }
               .signature-block { width: 200px; }
               .signature-title { font-size: 11px; color: #64748b; margin-bottom: 60px; }
               .signature-line { border-top: 1px solid #94a3b8; padding-top: 8px; font-size: 12px; font-weight: 700; color: #0f172a; }
             </style>
           </head>
           <body>
-
             <div class="header">
               <div>
-                <h1 class="brand-name">${infoBisnis.nama}</h1>
-                <div class="brand-address">${infoBisnis.alamat}</div>
+                <h1 class="brand-name">${infoBisnis?.nama || "Perusahaan Anonim"}</h1>
+                <div class="brand-address">${infoBisnis?.alamat || "Alamat belum diatur"}</div>
               </div>
               <div>
                 <h2 class="report-title">Laporan Finansial Resmi</h2>
@@ -397,24 +435,24 @@ export default function ReportsPage() {
 
             <div class="metrics-grid">
               <div class="metric-card success">
-                <div class="metric-title">Total Pendapatan</div>
-                <div class="metric-value">${convertAndFormat(stats.totalPendapatan)}</div>
+                <div class="metric-title">Total Pendapatan (In)</div>
+                <div class="metric-value">${convertAndFormatCurrency(stats.totalPendapatan, mataUang)}</div>
+              </div>
+              <div class="metric-card danger">
+                <div class="metric-title">Total Beban (Out)</div>
+                <div class="metric-value">${convertAndFormatCurrency(stats.totalPengeluaran, mataUang)}</div>
+              </div>
+              <div class="metric-card primary">
+                <div class="metric-title">Laba Bersih (P&L)</div>
+                <div class="metric-value" style="color: ${stats.labaBersih >= 0 ? "#0f172a" : "#be123c"}">${convertAndFormatCurrency(stats.labaBersih, mataUang)}</div>
               </div>
               <div class="metric-card warning">
                 <div class="metric-title">Piutang Tertunda</div>
-                <div class="metric-value">${convertAndFormat(stats.totalTertunda)}</div>
-              </div>
-              <div class="metric-card info">
-                <div class="metric-title">Rasio Penagihan</div>
-                <div class="metric-value">${stats.collectionRate.toFixed(1)}%</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-title">Volume Transaksi</div>
-                <div class="metric-value">${stats.totalInvoices} Dokumen</div>
+                <div class="metric-value">${convertAndFormatCurrency(stats.totalTertunda, mataUang)}</div>
               </div>
             </div>
 
-            <div class="section-title">Buku Besar Transaksi</div>
+            <div class="section-title" style="margin-top: 10px;">Buku Besar Pendapatan (Invoices)</div>
             <table class="table-modern">
               <thead>
                 <tr>
@@ -431,6 +469,23 @@ export default function ReportsPage() {
               </tbody>
             </table>
 
+            <div class="section-title">Buku Besar Pengeluaran (Expenses)</div>
+            <table class="table-modern">
+              <thead>
+                <tr>
+                  <th class="text-center" style="width: 5%;">No</th>
+                  <th style="width: 15%;">ID Biaya</th>
+                  <th style="width: 20%;">Kategori</th>
+                  <th style="width: 25%;">Deskripsi</th>
+                  <th class="text-center" style="width: 15%;">Status</th>
+                  <th class="text-right" style="width: 20%;">Nominal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${barisTabelExpHtml || '<tr><td colspan="6" class="text-center text-muted" style="padding: 30px;">Tidak ada pengeluaran yang tercatat pada periode ini.</td></tr>'}
+              </tbody>
+            </table>
+
             <div class="footer">
               <div class="signature-block">
                 <div class="signature-title">Dibuat Otomatis Oleh Sistem,</div>
@@ -438,10 +493,9 @@ export default function ReportsPage() {
               </div>
               <div class="signature-block text-right">
                 <div class="signature-title text-right">Disetujui Oleh Admin,</div>
-                <div class="signature-line text-right">${infoBisnis.nama}</div>
+                <div class="signature-line text-right">${infoBisnis?.nama || "Perusahaan Anonim"}</div>
               </div>
             </div>
-
           </body>
         </html>
       `;
@@ -477,50 +531,92 @@ export default function ReportsPage() {
           Laporan Finansial
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
-          Tinjau ringkasan pendapatan, analisis performa klien, tren layanan
-          terpopuler, dan ekspor data operasional secara komprehensif.
+          Tinjau ringkasan pendapatan, pengeluaran operasional, laba bersih,
+          serta ekspor data secara komprehensif.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* PANEL KIRI: PREVIEW STATS */}
         <div className="lg:col-span-2 space-y-6">
-          {/* SECTION 1: METRIK UTAMA */}
           <section>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+              {/* KARTU 1: PENDAPATAN */}
               <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
                 <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
                   <Wallet className="w-6 h-6" />
                 </div>
                 <div
-                  className="text-2xl sm:text-3xl font-bold text-foreground truncate"
-                  title={convertAndFormat(stats.totalPendapatan)}
+                  className="text-xl sm:text-2xl font-bold text-foreground truncate"
+                  title={convertAndFormatCurrency(
+                    stats.totalPendapatan,
+                    mataUang,
+                  )}
                 >
-                  {convertAndFormat(stats.totalPendapatan)}
+                  {convertAndFormatCurrency(stats.totalPendapatan, mataUang)}
                 </div>
-                <div className="text-xs text-muted-foreground font-medium mt-1 uppercase tracking-wider">
-                  Total Pendapatan (Lunas)
+                <div className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                  Pendapatan Lunas
                 </div>
               </div>
 
+              {/* KARTU 2: PENGELUARAN */}
+              <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+                <div className="p-3 bg-rose-500/10 text-rose-500 rounded-xl shrink-0 w-fit mb-3">
+                  <TrendingDown className="w-6 h-6" />
+                </div>
+                <div
+                  className="text-xl sm:text-2xl font-bold text-foreground truncate"
+                  title={convertAndFormatCurrency(
+                    stats.totalPengeluaran,
+                    mataUang,
+                  )}
+                >
+                  {convertAndFormatCurrency(stats.totalPengeluaran, mataUang)}
+                </div>
+                <div className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                  Total Pengeluaran
+                </div>
+              </div>
+
+              {/* KARTU 3: LABA BERSIH */}
+              <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+                <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl shrink-0 w-fit mb-3">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <div
+                  className="text-xl sm:text-2xl font-bold text-foreground truncate"
+                  title={convertAndFormatCurrency(stats.labaBersih, mataUang)}
+                >
+                  {convertAndFormatCurrency(stats.labaBersih, mataUang)}
+                </div>
+                <div className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                  Laba Bersih
+                </div>
+              </div>
+
+              {/* KARTU 4: PIUTANG TERTUNDA */}
               <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
                 <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
                   <Clock className="w-6 h-6" />
                 </div>
                 <div
-                  className="text-2xl sm:text-3xl font-bold text-foreground truncate"
-                  title={convertAndFormat(stats.totalTertunda)}
+                  className="text-xl sm:text-2xl font-bold text-foreground truncate"
+                  title={convertAndFormatCurrency(
+                    stats.totalTertunda,
+                    mataUang,
+                  )}
                 >
-                  {convertAndFormat(stats.totalTertunda)}
+                  {convertAndFormatCurrency(stats.totalTertunda, mataUang)}
                 </div>
-                <div className="text-xs text-muted-foreground font-medium mt-1 uppercase tracking-wider">
-                  Total Tertunda / Piutang
+                <div className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                  Piutang Tertunda
                 </div>
               </div>
             </div>
           </section>
 
-          {/* KONTRIBUTOR KLIENT */}
+          {/* KONTRIBUTOR KLIEN */}
           <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -570,7 +666,7 @@ export default function ReportsPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-md font-bold text-sm inline-block">
-                              {convertAndFormat(klien.total)}
+                              {convertAndFormatCurrency(klien.total, mataUang)}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -584,7 +680,6 @@ export default function ReportsPage() {
 
           {/* LAYANAN DAN METODE */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Layanan Terlaris */}
             <Card className="rounded-2xl shadow-sm border-border">
               <CardHeader className="pb-4">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -609,7 +704,7 @@ export default function ReportsPage() {
                             {item.nama}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {convertAndFormat(item.revenue)}
+                            {convertAndFormatCurrency(item.revenue, mataUang)}
                           </p>
                         </div>
                         <Badge
@@ -625,7 +720,6 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Metode Pembayaran */}
             <Card className="rounded-2xl shadow-sm border-border">
               <CardHeader className="pb-4">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -661,9 +755,96 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* TABEL RIWAYAT PENGELUARAN */}
+          <Card className="rounded-2xl shadow-sm border-border overflow-hidden">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingDown className="w-5 h-5 text-rose-500" /> Sorotan
+                Pengeluaran Terbaru
+              </CardTitle>
+              <CardDescription>
+                5 riwayat pengeluaran operasional terakhir pada periode yang
+                dipilih.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow>
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Deskripsi</TableHead>
+                      <TableHead>Kategori Biaya</TableHead>
+                      <TableHead className="text-right">Nominal</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stats.rawPengeluaranTerfilter.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-muted-foreground py-8"
+                        >
+                          Belum ada pengeluaran yang tercatat pada periode ini.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      stats.rawPengeluaranTerfilter
+                        .slice(0, 5)
+                        .map((exp, index) => (
+                          <TableRow
+                            key={index}
+                            className="hover:bg-muted/50 transition-colors border-b border-muted/50"
+                          >
+                            <TableCell className="text-muted-foreground text-sm">
+                              {exp.tanggal}
+                            </TableCell>
+                            <TableCell className="font-medium text-foreground">
+                              {exp.deskripsi}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className="rounded-full bg-muted text-muted-foreground hover:bg-muted/80 border-transparent font-medium"
+                              >
+                                {exp.kategori}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono font-semibold text-right">
+                              {convertAndFormatCurrency(
+                                parseCurrencyToNumber(exp.jumlah),
+                                mataUang,
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant={
+                                  exp.status === "Dibayar"
+                                    ? "default"
+                                    : "outline"
+                                }
+                                className={
+                                  exp.status === "Dibayar"
+                                    ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20"
+                                    : "text-amber-600 border-amber-600/20 bg-amber-500/10"
+                                }
+                              >
+                                {exp.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* PANEL KANAN: KONTROL KONFIGURASI EKSPOR (SHADCNUI CARD) */}
+        {/* PANEL KANAN: KONTROL KONFIGURASI EKSPOR */}
         <div className="lg:col-span-1 lg:sticky lg:top-6">
           <Card className="rounded-2xl shadow-md border-primary/20 overflow-hidden flex flex-col h-full bg-gradient-to-b from-card to-muted/20">
             <div className="h-2 w-full bg-gradient-to-r from-primary via-indigo-500 to-emerald-500" />
@@ -678,7 +859,6 @@ export default function ReportsPage() {
             </CardHeader>
 
             <CardContent className="space-y-5">
-              {/* Selektor 1: Periode */}
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-primary" /> Jangkauan
@@ -701,7 +881,6 @@ export default function ReportsPage() {
                 </Select>
               </div>
 
-              {/* Selektor 2: Format Dokumen */}
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1.5">
                   <Download className="w-3.5 h-3.5 text-primary" /> Format
@@ -727,8 +906,9 @@ export default function ReportsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground/80 leading-relaxed pt-1">
-                  * Format PDF menyertakan Kop Surat Bisnis, tabel ringkasan
-                  rapi, dan tanda tangan digital.
+                  * Laporan PDF menyertakan metrik laba rugi dan tabel
+                  pengeluaran. File Excel akan memiliki lembar sheet (tab) ganda
+                  otomatis.
                 </p>
               </div>
             </CardContent>

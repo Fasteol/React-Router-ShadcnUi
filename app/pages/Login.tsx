@@ -6,8 +6,7 @@ import {
   Lock,
   ArrowRight,
   Loader2,
-  Receipt,
-  ShieldCheck,
+  ShieldCheck, // Receipt dihapus karena tidak digunakan
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -22,8 +21,8 @@ import {
   CardDescription,
 } from "~/components/ui/card";
 
-// Impor tipe dan data dummy dari invoices.ts
-import { defaultUsers, type User } from "~/data/invoices";
+// Impor tipe dan data dummy dari invoices.ts (diseragamkan menggunakan UserType)
+import { defaultUsers, type User as UserType } from "~/data/invoices";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -47,7 +46,7 @@ export default function LoginPage() {
       setIsLoading(false);
 
       // 1. Ambil data user dari "Database"
-      const usersDB: User[] = JSON.parse(
+      const usersDB: UserType[] = JSON.parse(
         localStorage.getItem("users_db") || "[]",
       );
 

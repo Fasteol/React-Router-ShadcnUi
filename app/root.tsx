@@ -9,15 +9,13 @@ import {
   useNavigate,
 } from "react-router";
 
-import { useEffect, useState } from "react";
-
+import { useEffect } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Button } from "~/components/ui/button";
 import { ThemeProvider, useTheme } from "~/components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
 
-// Import Komponen Sidebar Primitives dari Shadcn UI
 import {
   SidebarInset,
   SidebarProvider,
@@ -25,11 +23,10 @@ import {
 } from "~/components/ui/sidebar";
 import { AppSidebar } from "~/components/app-sidebar";
 
-// Import Ikon dari Lucide Icons
-import { Moon, Sun, User } from "lucide-react";
+import { Moon, Sun, User as LayoutUser } from "lucide-react";
 
-// IMPORT DATA DUMMY TIM SEBAGAI FALLBACK ROLE
-import { dataAwalTim } from "~/data/invoices";
+// HOOKS GLOBAL ZUSTAND
+import { useAppStore } from "~/store/useAppStore";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -44,9 +41,6 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-// ==========================================
-// UTILITY: MENDAPATKAN NAMA HALAMAN DARI URL
-// ==========================================
 const getPageTitle = (pathname: string) => {
   if (pathname === "/") return "Ringkasan Dashboard";
   if (pathname === "/transaction") return "Kelola Transaksi";
@@ -60,7 +54,6 @@ const getPageTitle = (pathname: string) => {
   return "Ruang Kerja Utama";
 };
 
-// 1. KOMPONEN UTAMA LAYOUT (Membungkus Provider)
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -72,7 +65,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider>
-          {/* Membungkus dengan SidebarProvider agar primitives Shadcn bisa bekerja */}
           <SidebarProvider defaultOpen={false}>
             <LayoutContent>{children}</LayoutContent>
           </SidebarProvider>
@@ -85,63 +77,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 2. SUB-KOMPONEN KONTEN LAYOUT (Tempat Logika Navigasi & UI Berada)
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
 
-  // State user kini menampung property 'role'
-  const [headerUser, setHeaderUser] = useState({
-    name: "Administrator",
-    role: "Admin",
-  });
+  // AMBIL DATA DARI ZUSTAND STORE
+  const { profil, team } = useAppStore();
 
   const isAuthPage =
     location.pathname === "/login" || location.pathname === "/register";
 
-  // ==========================================
-  // LOGIKA ROUTE PROTECTION & SINKRONISASI USER
-  // ==========================================
+  // Cek Status Autentikasi
   useEffect(() => {
     const isLoggedIn = localStorage.getItem("isLoggedIn");
-
     if (!isLoggedIn && !isAuthPage) {
       navigate("/login");
     }
-
-    // Fungsi untuk menarik data user & role
-    const loadUserData = () => {
-      const storedUserStr = localStorage.getItem("currentUser");
-
-      if (storedUserStr) {
-        const parsedUser = JSON.parse(storedUserStr);
-
-        // Tarik data tim dari localStorage atau gunakan fallback data awal
-        const teamDB = JSON.parse(
-          localStorage.getItem("team_db") || JSON.stringify(dataAwalTim),
-        );
-
-        // Cari anggota tim yang emailnya cocok dengan email user yang login
-        const matchedMember = teamDB.find(
-          (member: any) => member.email === parsedUser.email,
-        );
-
-        setHeaderUser({
-          name: parsedUser.name,
-          // Gunakan role dari database tim, jika tidak ditemukan default ke 'Admin'
-          role: matchedMember?.role || "Admin",
-        });
-      }
-    };
-
-    loadUserData(); // Muat data saat halaman pertama kali dirender
-
-    // MENDENGARKAN EVENT DARI SETTINGS.TSX (Update Real-time)
-    window.addEventListener("user-updated", loadUserData);
-
-    // Cleanup event listener
-    return () => window.removeEventListener("user-updated", loadUserData);
   }, [location.pathname, navigate, isAuthPage]);
 
   if (isAuthPage) {
@@ -152,7 +104,10 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Jika BUKAN di halaman Auth, render Layout utuh (Dashboard dkk)
+  // Cari peran (role) anggota berdasarkan email profil di store tim
+  const matchedMember = team.find((member) => member.email === profil.email);
+  const userRole = matchedMember?.role || "Admin";
+
   return (
     <div className="flex min-h-screen w-full">
       <SidebarProvider defaultOpen={true}>
@@ -161,7 +116,6 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         <SidebarInset>
           <div className="flex-1 flex flex-col">
             <header className="sticky z-40 top-0 h-16 border-b bg-background/95 backdrop-blur px-4 flex items-center justify-between shadow-sm">
-              {/* Sisi Kiri: Breadcrumb / Nama Halaman Aktif */}
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
 
@@ -173,9 +127,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
 
-              {/* Sisi Kanan: Preferensi & Profil */}
               <div className="flex items-center gap-2 sm:gap-4">
-                {/* Toggle Theme */}
                 <Button
                   variant="outline"
                   size="icon"
@@ -189,29 +141,35 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
                 <div className="h-6 w-[1px] bg-border hidden sm:block mx-1"></div>
 
-                {/* Profil User (Interaktif) */}
                 <div
                   className="flex items-center gap-3 cursor-pointer group p-1.5 rounded-full hover:bg-muted/50 transition-colors"
                   onClick={() => navigate("/setting")}
                   title="Ke Pengaturan Profil"
                 >
                   <div className="hidden md:flex flex-col items-end">
-                    {/* ROLE MENJADI DINAMIS */}
                     <span className="text-xs font-bold leading-none text-foreground group-hover:text-primary transition-colors uppercase tracking-wider">
-                      {headerUser.role}
+                      {userRole}
                     </span>
                     <span className="text-[10px] text-muted-foreground truncate max-w-[120px] mt-1 font-medium">
-                      {headerUser.name}
+                      {profil.nama || "Pengguna"}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
-                    <User className="w-4 h-4" />
+
+                  <div className="w-9 h-9 shrink-0 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 text-primary overflow-hidden group-hover:border-primary/50 transition-all">
+                    {profil.avatar ? (
+                      <img
+                        src={profil.avatar}
+                        alt={profil.nama}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <LayoutUser className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    )}
                   </div>
                 </div>
               </div>
             </header>
 
-            {/* MAIN AREA */}
             <main className="flex-1 p-6 md:p-10 max-w-5xl w-full mx-auto">
               {children}
             </main>

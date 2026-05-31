@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   Users,
@@ -8,11 +8,12 @@ import {
   Plus,
   Edit2,
   Trash2,
-  AlertCircle,
   CheckCircle2,
   Wallet,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
-import { cn } from "~/lib/utils";
+
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -24,16 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { dataAwal } from "~/data/invoices";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "~/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -42,105 +33,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 
-export type Client = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  status: "Aktif" | "Non-aktif";
-  totalInvoices: number;
-  totalSpent: number;
-};
+import { useAppStore } from "~/store/useAppStore";
+import { ConfirmDeleteModal } from "~/components/ui/confirm-delete-modal";
+import { convertAndFormatCurrency } from "~/lib/currency";
+import { CustomPagination } from "~/components/ui/custom-pagination";
+import { cn } from "~/lib/utils";
 
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
+import type { Client } from "~/types/index";
 
-const parseCurrencyToNumber = (currencyString: string) => {
-  return parseInt(currencyString.replace(/[^0-9]/g, ""), 10) || 0;
-};
-
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
-
-// ==========================================
-// FUNGSI EKSTRAKSI DATA AWAL KLIEN
-// ==========================================
-const extractInitialClients = (): Client[] => {
-  const clientMap = new Map<string, Client>();
-  dataAwal.forEach((inv) => {
-    const amount = parseCurrencyToNumber(inv.totalAmount);
-
-    if (!clientMap.has(inv.clientEmail)) {
-      clientMap.set(inv.clientEmail, {
-        id: `CL-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
-        name: inv.clientName,
-        email: inv.clientEmail,
-        phone: "-",
-        status: "Aktif",
-        totalInvoices: 1,
-        totalSpent: amount,
-      });
-    } else {
-      const existingClient = clientMap.get(inv.clientEmail)!;
-      existingClient.totalInvoices += 1;
-      existingClient.totalSpent += amount;
-    }
-  });
-  return Array.from(clientMap.values());
-};
-
-// ==========================================
-// KOMPONEN UTAMA
-// ==========================================
 export default function ClientsPage() {
   const navigate = useNavigate();
-  const [mataUang, setMataUang] = useState("IDR");
+  const mataUang = useAppStore((state) => state.preferensi.mataUang);
 
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-    }
-  }, []);
+  // MENGAMBIL DATA CLIENT DAN INVOICE SEKALIGUS
+  const { clients, invoices, addClient, updateClient, deleteClient } =
+    useAppStore();
 
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
+  const [openComboboxStatus, setOpenComboboxStatus] = useState(false);
+  const [openFilterStatus, setOpenFilterStatus] = useState(false);
 
-  const [clients, setClients] = useState<Client[]>(extractInitialClients());
   const [kataKunci, setKataKunci] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua");
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
@@ -161,19 +87,44 @@ export default function ClientsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // ==========================================
-  // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER & METRIK
-  // ==========================================
+  // ======================================================================
+  // LOGIKA BARU: MENGHITUNG STATISTIK CLIENT SECARA DINAMIS DARI INVOICE
+  // ======================================================================
+  const clientsWithStats = useMemo(() => {
+    return clients.map((client) => {
+      const riwayatInvoice = invoices.filter(
+        (inv) =>
+          inv.clientEmail === client.email || inv.clientName === client.name,
+      );
+
+      const hitungTotal = riwayatInvoice.length;
+      const hitungPengeluaran = riwayatInvoice.reduce((sum, inv) => {
+        // Mengubah "Rp 5.000.000" -> "5000000" lalu di-convert ke Number
+        const bersihkanString = inv.totalAmount
+          ? inv.totalAmount.replace(/[^0-9]/g, "")
+          : "0";
+        const angka = Number(bersihkanString) || 0;
+
+        return sum + angka;
+      }, 0);
+
+      return {
+        ...client,
+        totalinvoices: hitungTotal, // (Sesuai dengan properti 'totalinvoices' di type)
+        totalSpent: hitungPengeluaran,
+      };
+    });
+  }, [clients, invoices]);
+
+  // Gunakan clientsWithStats (Bukan clients biasa) untuk pencarian dan metrik
   const { dataTersaring, dataAktif, dataNonAktif, totalNilaiTransaksi } =
     useMemo(() => {
-      const tersaring = clients.filter((item) => {
+      const tersaring = clientsWithStats.filter((item) => {
         const cocokKataKunci =
-          item.name.toLowerCase().includes(kataKunci.toLowerCase()) ||
-          item.email.toLowerCase().includes(kataKunci.toLowerCase());
-
+          item.name?.toLowerCase().includes(kataKunci.toLowerCase()) ||
+          item.email?.toLowerCase().includes(kataKunci.toLowerCase());
         const cocokStatus =
           filterStatus === "Semua" || item.status === filterStatus;
-
         return cocokKataKunci && cocokStatus;
       });
 
@@ -181,10 +132,10 @@ export default function ClientsPage() {
         nonAktif = 0,
         totalNilai = 0;
 
-      clients.forEach((item) => {
+      tersaring.forEach((item) => {
         if (item.status === "Aktif") aktif++;
         else if (item.status === "Non-aktif") nonAktif++;
-        totalNilai += item.totalSpent;
+        totalNilai += item.totalSpent || 0;
       });
 
       return {
@@ -193,17 +144,14 @@ export default function ClientsPage() {
         dataNonAktif: nonAktif,
         totalNilaiTransaksi: totalNilai,
       };
-    }, [clients, kataKunci, filterStatus]);
+    }, [clientsWithStats, kataKunci, filterStatus]);
 
-  // LOGIKA PAGINASI
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
-  const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
-  const indexAkhir = indexAwal + itemPerHalaman;
-  const dataTampil = dataTersaring.slice(indexAwal, indexAkhir);
+  const dataTampil = dataTersaring.slice(
+    (halamanSaatIni - 1) * itemPerHalaman,
+    halamanSaatIni * itemPerHalaman,
+  );
 
-  // ==========================================
-  // FUNGSI AKSI (TAMBAH, EDIT, HAPUS)
-  // ==========================================
   const bukaFormTambah = () => {
     setFormMode("tambah");
     setFormData({
@@ -230,110 +178,43 @@ export default function ClientsPage() {
       return;
     }
 
-    if (formMode === "tambah") {
-      const isExist = clients.some((item) => item.email === formData.email);
-      if (isExist) {
-        toast.error(`Gagal! Email ${formData.email} sudah terdaftar.`);
-        return;
-      }
-      setClients([formData, ...clients]);
-      toast.success(`Berhasil menambahkan klien ${formData.name}!`);
-    } else {
-      const dataBaru = clients.map((item) =>
-        item.id === formData.id ? formData : item,
-      );
-      setClients(dataBaru);
-      toast.success(`Berhasil memperbarui klien ${formData.name}!`);
+    const targetId = formData.id || `CL-${Date.now()}`;
+
+    // Cek duplikasi email (baik untuk tambah maupun edit)
+    const isEmailTerpakai = clients.some(
+      (item) => item.email === formData.email && item.id !== targetId,
+    );
+
+    if (isEmailTerpakai) {
+      toast.error(`Gagal! Email ${formData.email} sudah terdaftar.`);
+      return;
     }
 
+    if (formMode === "tambah") {
+      const payload: Client = { ...formData, id: targetId };
+      addClient(payload);
+      toast.success(`Berhasil menambahkan klien ${formData.name}!`);
+    } else {
+      updateClient(targetId, formData);
+      toast.success(`Berhasil memperbarui klien ${formData.name}!`);
+    }
     setIsDialogOpen(false);
-  };
-
-  const konfirmasiHapus = (idKlien: string) => {
-    setIdYangDihapus(idKlien);
-    setIsDeleteDialogOpen(true);
   };
 
   const eksekusiHapus = () => {
     if (idYangDihapus) {
       const klienTerhapus = clients.find((c) => c.id === idYangDihapus);
-      const dataBaru = clients.filter((item) => item.id !== idYangDihapus);
-      setClients(dataBaru);
-
-      if (dataTampil.length === 1 && halamanSaatIni > 1) {
+      deleteClient(idYangDihapus);
+      if (dataTampil.length === 1 && halamanSaatIni > 1)
         setHalamanSaatIni(halamanSaatIni - 1);
-      }
       toast.success(`Klien ${klienTerhapus?.name} berhasil dihapus.`);
     }
     setIsDeleteDialogOpen(false);
     setIdYangDihapus(null);
   };
 
-  const renderPaginationItems = () => {
-    const items = [];
-    const batasTampil = 5;
-
-    if (totalHalaman <= batasTampil) {
-      for (let i = 1; i <= totalHalaman; i++) items.push(i);
-    } else {
-      if (halamanSaatIni <= 3) {
-        items.push(1, 2, 3, 4, "ellipsis", totalHalaman);
-      } else if (halamanSaatIni >= totalHalaman - 2) {
-        items.push(
-          1,
-          "ellipsis",
-          totalHalaman - 3,
-          totalHalaman - 2,
-          totalHalaman - 1,
-          totalHalaman,
-        );
-      } else {
-        items.push(
-          1,
-          "ellipsis",
-          halamanSaatIni - 1,
-          halamanSaatIni,
-          halamanSaatIni + 1,
-          "ellipsis",
-          totalHalaman,
-        );
-      }
-    }
-
-    return items.map((item, index) => {
-      if (item === "ellipsis") {
-        return (
-          <PaginationItem key={`ellipsis-${index}`}>
-            <PaginationEllipsis />
-          </PaginationItem>
-        );
-      }
-
-      return (
-        <PaginationItem key={item}>
-          <PaginationLink
-            href="#"
-            isActive={halamanSaatIni === item}
-            onClick={(e) => {
-              e.preventDefault();
-              setHalamanSaatIni(item as number);
-            }}
-            className={
-              halamanSaatIni === item
-                ? "rounded-xl"
-                : "rounded-xl hover:bg-muted"
-            }
-          >
-            {item}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    });
-  };
-
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -351,9 +232,9 @@ export default function ClientsPage() {
         </p>
       </div>
 
-      {/* OVERVIEW CARDS (METRIK) */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        {/* Metric Cards */}
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
             <Users className="w-6 h-6" />
           </div>
@@ -364,18 +245,16 @@ export default function ClientsPage() {
             Semua Klien Terdaftar
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
             <UserCheck className="w-6 h-6" />
           </div>
           <div className="text-2xl font-bold text-foreground">{dataAktif}</div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Pelanggan Aktif Bertransaksi
+            Pelanggan Aktif
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-muted text-muted-foreground rounded-xl shrink-0 w-fit mb-3">
             <UserMinus className="w-6 h-6" />
           </div>
@@ -386,16 +265,12 @@ export default function ClientsPage() {
             Tidak Ada Aktivitas
           </div>
         </div>
-
-        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
             <Wallet className="w-6 h-6" />
           </div>
-          <div
-            className="text-xl sm:text-2xl font-bold text-foreground truncate"
-            title={convertAndFormat(totalNilaiTransaksi)}
-          >
-            {convertAndFormat(totalNilaiTransaksi)}
+          <div className="text-xl sm:text-2xl font-bold text-foreground truncate">
+            {convertAndFormatCurrency(totalNilaiTransaksi, mataUang)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Total Nilai Transaksi Klien
@@ -403,44 +278,71 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
-          <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-            <div className="relative md:max-w-xs w-full">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
+          <div className="flex flex-1 gap-3">
+            <div className="relative w-full md:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Cari nama klien atau email..."
+                placeholder="Cari nama atau email klien..."
                 value={kataKunci}
                 onChange={(e) => {
                   setKataKunci(e.target.value);
                   setHalamanSaatIni(1);
                 }}
-                className="pl-9 rounded-xl w-full"
+                className="pl-9 rounded-xl w-full h-10 border-border/50"
               />
             </div>
-
-            <Select
-              value={filterStatus}
-              onValueChange={(val) => {
-                setFilterStatus(val);
-                setHalamanSaatIni(1);
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-[180px] rounded-xl h-10">
-                <SelectValue placeholder="Filter Status" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="Semua">Semua Status</SelectItem>
-                <SelectItem value="Aktif">Aktif</SelectItem>
-                <SelectItem value="Non-aktif">Non-aktif</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover open={openFilterStatus} onOpenChange={setOpenFilterStatus}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openFilterStatus}
+                  className="w-[180px] justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                >
+                  <span className="truncate">{filterStatus}</span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[180px] p-0 rounded-xl shadow-lg border-border/60"
+                align="end"
+              >
+                <Command>
+                  <CommandList>
+                    <CommandEmpty>Status tidak ditemukan.</CommandEmpty>
+                    <CommandGroup>
+                      {["Semua", "Aktif", "Non-aktif"].map((status) => (
+                        <CommandItem
+                          key={status}
+                          onSelect={() => {
+                            setFilterStatus(status);
+                            setHalamanSaatIni(1);
+                            setOpenFilterStatus(false);
+                          }}
+                          className="rounded-lg cursor-pointer my-0.5 font-medium"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-primary shrink-0",
+                              filterStatus === status
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">{status}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
-
           <Button
             onClick={bukaFormTambah}
-            className="cursor-pointer rounded-xl shrink-0 gap-2 shadow-sm"
+            className="rounded-xl gap-2 shadow-sm font-semibold h-10"
           >
             <Plus className="w-4 h-4" /> Tambah Klien
           </Button>
@@ -450,20 +352,12 @@ export default function ClientsPage() {
           <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-[250px] font-semibold">
-                  Informasi Klien
-                </TableHead>
-                <TableHead className="font-semibold w-[200px]">
-                  Kontak
-                </TableHead>
-                <TableHead className="font-semibold text-center w-[100px]">
-                  Invoice
-                </TableHead>
-                <TableHead className="font-semibold">Nilai Transaksi</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="text-center w-32 font-semibold">
-                  Aksi
-                </TableHead>
+                <TableHead>Informasi Klien</TableHead>
+                <TableHead>Kontak</TableHead>
+                <TableHead className="text-center">Invoice</TableHead>
+                <TableHead>Nilai Transaksi</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-center">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -483,39 +377,41 @@ export default function ClientsPage() {
                     className="hover:bg-muted/40 transition-colors"
                   >
                     <TableCell>
-                      <div className="font-bold text-foreground">
-                        {client.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="font-bold">{client.name}</div>
+                      <div className="text-xs text-muted-foreground">
                         ID: {client.id}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm font-medium">{client.email}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="text-xs text-muted-foreground">
                         {client.phone}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="font-bold text-foreground mx-auto bg-muted/50 px-3 py-1 rounded-md w-fit">
-                        {client.totalInvoices}
+                      <div className="font-bold mx-auto bg-muted/50 px-3 py-1 rounded-md w-fit">
+                        {client.totalinvoices || 0}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-bold text-foreground">
-                        {convertAndFormat(client.totalSpent)}
+                      <div className="font-bold">
+                        {convertAndFormatCurrency(
+                          client.totalSpent || 0,
+                          mataUang,
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={
+                      <div
+                        className={cn(
+                          "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border",
                           client.status === "Aktif"
-                            ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400 border-0 shadow-none font-semibold"
-                            : "bg-muted text-muted-foreground border-0 shadow-none font-semibold hover:bg-muted"
-                        }
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20",
+                        )}
                       >
-                        {client.status}
-                      </Badge>
+                        {client.status || "Non-aktif"}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -523,17 +419,18 @@ export default function ClientsPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => bukaFormEdit(client)}
-                          className="h-8 w-8 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950"
-                          title="Edit"
+                          className="h-8 w-8 text-blue-600 hover:bg-blue-100"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => konfirmasiHapus(client.id)}
-                          className="h-8 w-8 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950"
-                          title="Hapus"
+                          onClick={() => {
+                            if (client.id) setIdYangDihapus(client.id);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="h-8 w-8 text-red-600 hover:bg-red-100"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -546,221 +443,167 @@ export default function ClientsPage() {
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION CONTROLLER */}
-        {totalHalaman > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-1.5 rounded-full border shadow-sm">
-              <span>Tampilkan</span>
-              <Select
-                value={itemPerHalaman.toString()}
-                onValueChange={(val) => {
-                  setItemPerHalaman(Number(val));
-                  setHalamanSaatIni(1);
-                }}
-              >
-                <SelectTrigger className="w-[70px] h-7 rounded-md border-0 bg-transparent shadow-none focus:ring-0 px-1 font-semibold text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
-              <span>data</span>
-            </div>
-
-            <Pagination className="w-auto mx-0">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni > 1)
-                        setHalamanSaatIni(halamanSaatIni - 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni === 1
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-                {renderPaginationItems()}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (halamanSaatIni < totalHalaman)
-                        setHalamanSaatIni(halamanSaatIni + 1);
-                    }}
-                    className={cn(
-                      "rounded-xl",
-                      halamanSaatIni >= totalHalaman
-                        ? "pointer-events-none opacity-50"
-                        : "hover:bg-muted",
-                    )}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
+        <CustomPagination
+          halamanSaatIni={halamanSaatIni}
+          setHalamanSaatIni={setHalamanSaatIni}
+          totalHalaman={totalHalaman}
+          itemPerHalaman={itemPerHalaman}
+          setItemPerHalaman={setItemPerHalaman}
+        />
       </div>
 
-      {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
-      ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
-          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
-          <div className="p-6">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl font-bold">
-                {formMode === "tambah"
-                  ? "Tambah Klien Baru"
-                  : "Edit Data Klien"}
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                {formMode === "tambah"
-                  ? "Lengkapi detail informasi klien di bawah ini."
-                  : "Ubah detail informasi kontak klien yang sudah ada."}
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[500px] sm:rounded-[1.5rem] p-0 overflow-hidden border border-border/50 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60 shrink-0"></div>
 
-            <div className="grid gap-5 py-2">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="text-2xl font-bold tracking-tight">
+              {formMode === "tambah" ? "Tambah Klien Baru" : "Edit Data Klien"}
+            </DialogTitle>
+            <DialogDescription>
+              Lengkapi informasi kontak dan status dari mitra bisnis Anda di
+              sini.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-5">
+            <div className="grid gap-2">
+              <Label className="font-semibold">Nama Lengkap</Label>
+              <Input
+                placeholder="Contoh: Budi Santoso atau PT Maju Mundur"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                className="rounded-xl h-10 border-border/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Email Klien</Label>
+              <Input
+                type="email"
+                placeholder="contoh@email.com"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                className="rounded-xl h-10 border-border/50"
+              />
+            </div>
+            <div className="grid md:grid-cols-2 gap-5">
               <div className="grid gap-2">
-                <Label htmlFor="name" className="font-semibold">
-                  Nama Lengkap / Perusahaan
+                <Label className="font-semibold text-foreground/90">
+                  No. Telepon
                 </Label>
                 <Input
-                  id="name"
-                  placeholder="Contoh: PT. Inovasi Bangsa"
-                  value={formData.name}
+                  placeholder="08123456789"
+                  value={formData.phone || ""}
                   onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
+                    setFormData({ ...formData, phone: e.target.value })
                   }
-                  className="rounded-xl h-10"
+                  className="rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 transition-colors"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="email" className="font-semibold">
-                  Alamat Email
+                <Label className="font-semibold text-foreground/90">
+                  Status Kemitraan
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="email@perusahaan.com"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="rounded-xl h-10"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="phone" className="font-semibold">
-                    No. Telepon
-                  </Label>
-                  <Input
-                    id="phone"
-                    placeholder="08123456789"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
-                    className="rounded-xl h-10"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="statusKlien" className="font-semibold">
-                    Status
-                  </Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(val: "Aktif" | "Non-aktif") =>
-                      setFormData({ ...formData, status: val })
-                    }
-                  >
-                    <SelectTrigger
-                      id="statusKlien"
-                      className="w-full rounded-xl h-10"
+                <Popover
+                  open={openComboboxStatus}
+                  onOpenChange={setOpenComboboxStatus}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openComboboxStatus}
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
                     >
-                      <SelectValue placeholder="Pilih Status" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Aktif">Aktif</SelectItem>
-                      <SelectItem value="Non-aktif">Non-aktif</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      {formData.status || (
+                        <span className="text-muted-foreground">
+                          Pilih Status...
+                        </span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg border-border/60"
+                    align="start"
+                  >
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>Status tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {["Aktif", "Non-aktif"].map((status) => (
+                            <CommandItem
+                              key={status}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  status: status,
+                                });
+                                setOpenComboboxStatus(false);
+                              }}
+                              className="rounded-lg cursor-pointer my-0.5 font-medium"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-primary",
+                                  formData.status === status
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {status}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
-
-            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl w-full sm:w-auto font-medium"
-              >
-                Batal
-              </Button>
-              <Button
-                onClick={handleSimpan}
-                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Data
-              </Button>
-            </DialogFooter>
           </div>
+
+          <DialogFooter className="px-6 pt-4 pb-8 border-t border-border/50 bg-muted/10 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-xl font-medium h-10"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleSimpan}
+              className="rounded-xl shadow-md font-bold h-10"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ==========================================
-          ALERT DIALOG DELETE
-      ========================================== */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent className="sm:rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-500">
-              <AlertCircle className="w-5 h-5" />
-              Hapus Data Klien?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm mt-2">
-              Data klien ini akan dihapus permanen dari daftar.
-              <strong className="text-foreground block mt-1">
-                Perhatian: Transaksi (Invoice) yang terkait dengan klien ini
-                mungkin akan kehilangan referensi data kontaknya.
-              </strong>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <AlertDialogCancel
-              onClick={() => setIdYangDihapus(null)}
-              className="rounded-xl w-full sm:w-auto mt-0"
-            >
-              Batal
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-md w-full sm:w-auto font-semibold"
-            >
-              Ya, Hapus Klien
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteModal
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setIdYangDihapus(null);
+        }}
+        onConfirm={eksekusiHapus}
+        title="Hapus Data Klien?"
+        description={
+          <>
+            Data klien ini akan dihapus permanen dari daftar.{" "}
+            <strong className="text-foreground block mt-1">
+              Perhatian: Transaksi (Invoice) yang terkait dengan klien ini
+              mungkin akan kehilangan referensi data kontaknya.
+            </strong>
+          </>
+        }
+      />
     </div>
   );
 }

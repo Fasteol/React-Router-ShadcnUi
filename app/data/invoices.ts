@@ -1,49 +1,32 @@
-export type Invoice = {
-  id: string;
-  invoice: string;
-  clientName: string;
-  clientEmail: string;
-  paymentStatus: string;
-  totalAmount: string;
-  paymentMethod: string;
-  date: string;
-  dueDate: string;
-  services: Service[];
-};
+// Impor tipe data langsung dari root types Anda agar selalu sinkron
+import type {
+  Invoice,
+  TeamMember,
+  Expense,
+  UserType, // menggunakan UserType sesuai types/index.ts
+  Service,
+  Client,
+} from "~/types/index";
 
-// ==========================================
-// TIPE & DATA: MANAJEMEN TIM (TEAM MEMBER)
-// ==========================================
-export type TeamMember = {
+export interface User {
   id: string;
-  nama: string;
+  name: string;
   email: string;
-  role: "Admin" | "Finance" | "Viewer";
-  status: "Aktif" | "Mengundang" | "Ditangguhkan";
-};
-
-// ==========================================
-// TIPE & DATA: PENGELUARAN (EXPENSE)
-// ==========================================
-export type Expense = {
-  id: string;
-  deskripsi: string;
-  kategori: string;
-  jumlah: number;
-  tanggal: string;
-  status: "Dibayar" | "Pending";
-};
+  password: string;
+  avatar?: string;
+  role: string;
+}
 
 export type AdminSettings = {
   profil: {
     nama: string;
     email: string;
     telepon: string;
+    avatar?: string;
   };
   perusahaan: {
     nama: string;
     alamat: string;
-    // Tambahan field baru agar TypeScript tidak error
     telepon: string;
     email: string;
     npwp: string;
@@ -61,30 +44,16 @@ export type AdminSettings = {
   };
 };
 
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-};
-
-export type Service = {
-  id: string;
-  nama: string;
-  deskripsi: string;
-  harga: number;
-};
-
 export const defaultAdminSettings: AdminSettings = {
   profil: {
     nama: "Razan Muhammad Fauzan Sya'bani",
     email: "razan@fauzansyabani.dev",
     telepon: "081234567890",
+    avatar: "",
   },
   perusahaan: {
     nama: "Razan Web Studio",
     alamat: "Bandung, Jawa Barat",
-    // Tambahan nilai default (kosong/placeholder) untuk entitas bisnis
     telepon: "(022) 1234567",
     email: "hello@fauzansyabani.dev",
     npwp: "00.000.000.0-000.000",
@@ -179,23 +148,49 @@ const pilihanMetode = [
   "QRIS",
 ];
 
-export const defaultUsers: User[] = [
+export const defaultUsers: UserType[] = [
   {
     id: "USR-001",
     name: "Razan Muhammad Fauzan Sya'bani",
     email: "razan@fauzansyabani.dev",
     password: "password123",
+    avatar: "",
+    role: "Admin",
   },
 ];
 
-export const daftarKlien = [
-  { name: "Studio Ghibli Inc.", email: "finance@ghibli.jp" },
-  { name: "Tokopedia", email: "billing@tokopedia.com" },
-  { name: "PT. Mencari Cinta Sejati", email: "halo@mencaricinta.id" },
-  { name: "Razan Sya'bani Tech", email: "razan@fauzansyabani.dev" },
-  { name: "Reyna Juwita Design", email: "reyna@juwita.co" },
-  { name: "Bandung Creative Studio", email: "contact@bdgcreative.com" },
-  { name: "Anomali Coffee Roasters", email: "invoice@anomalicoffee.id" },
+export const daftarKlien: Client[] = [
+  {
+    name: "Studio Ghibli Inc.",
+    email: "finance@ghibli.jp",
+    phone: "08111222333",
+  },
+  { name: "Tokopedia", email: "billing@tokopedia.com", phone: "08222333444" },
+  {
+    name: "PT. Mencari Cinta Sejati",
+    email: "halo@mencaricinta.id",
+    phone: "08333444555",
+  },
+  {
+    name: "Razan Sya'bani Tech",
+    email: "razan@fauzansyabani.dev",
+    phone: "08444555666",
+  },
+  {
+    name: "Reyna Juwita Design",
+    email: "reyna@juwita.co",
+    phone: "08555666777",
+  },
+  {
+    name: "Bandung Creative Studio",
+    email: "contact@bdgcreative.com",
+    phone: "08666777888",
+  },
+  {
+    name: "Anomali Coffee Roasters",
+    email: "invoice@anomalicoffee.id",
+    phone: "08777888999",
+  },
 ];
 
 export const dataLayanan: Service[] = [
@@ -257,6 +252,7 @@ export const dataAwal: Invoice[] = Array.from({ length: 100 }).map(
       (acc, curr) => acc + curr.harga,
       0,
     );
+    // Disimpan sebagai string berformat Rupiah sesuai dengan type Invoice
     const nominalString = "Rp " + nominalAngka.toLocaleString("id-ID");
 
     const tglDibuat = generateRandomDate(1, 5);

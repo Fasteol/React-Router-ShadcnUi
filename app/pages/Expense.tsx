@@ -1,4 +1,13 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { format } from "date-fns";
+import { id } from "date-fns/locale";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { Calendar } from "~/components/ui/calendar";
+import { cn } from "~/lib/utils";
 import {
   Plus,
   Search,
@@ -6,17 +15,22 @@ import {
   Trash2,
   TrendingDown,
   Tag,
-  Calendar,
-  AlertCircle,
+  Calendar as CalendarIcon,
   CheckCircle2,
   Clock,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
-// IMPORT DATA DARI INVOICES.TS
-import { type Expense, dataAwalExpense } from "~/data/invoices";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
 
-// IMPORT SHADCN UI
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -37,44 +51,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 
-// ==========================================
-// KONFIGURASI KONVERSI MATA UANG
-// ==========================================
-const EXCHANGE_RATE_USD = 16000;
+// IMPORT TIPE DATA DARI FOLDER TYPES YANG BARU
+import { type Expense } from "~/types";
 
-const formatCurrency = (angka: number, currencyCode: string) => {
-  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
-    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
-  }).format(angka);
-};
+// IMPORT GLOBAL STORE & REUSABLE COMPONENTS
+import { convertAndFormatCurrency } from "~/lib/currency";
+import { useAppStore } from "~/store/useAppStore";
+import { ConfirmDeleteModal } from "~/components/ui/confirm-delete-modal";
+import { CustomPagination } from "~/components/ui/custom-pagination";
 
 export default function ExpensePage() {
-  const [expenses, setExpenses] = useState<Expense[]>(dataAwalExpense);
+  // 1. AMBIL STATE DAN ACTIONS DARI GLOBAL STORE ZUSTAND
+  const mataUang = useAppStore((state) => state.preferensi?.mataUang || "IDR");
+  const { expenses, addExpense, updateExpense, deleteExpense } = useAppStore();
+
   const [kataKunci, setKataKunci] = useState("");
   const [filterKategori, setFilterKategori] = useState("Semua");
-  const [mataUang, setMataUang] = useState("IDR");
+  const [halamanSaatIni, setHalamanSaatIni] = useState(1);
+  const [itemPerHalaman, setItemPerHalaman] = useState(10);
+  const [openComboboxKategori, setOpenComboboxKategori] = useState(false);
+  const [openComboboxStatus, setOpenComboboxStatus] = useState(false);
+  const [openFilterKategori, setOpenFilterKategori] = useState(false);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
@@ -84,54 +82,58 @@ export default function ExpensePage() {
     kategori: "Operasional",
     jumlah: 0,
     tanggal: new Date().toISOString().split("T")[0],
-    status: "Dibayar",
+    status: "Dibayar", // Sesuai dengan UI Anda
   });
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
-  // MENGAMBIL PREFERENSI MATA UANG
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("adminSettings");
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.preferensi?.mataUang) {
-        setMataUang(parsed.preferensi.mataUang);
-      }
-    }
-  }, []);
+  // LOGIKA FILTER DAN KALKULASI MENGGUNAKAN DATA DARI ZUSTAND
+  const { dataTersaring, totalPengeluaran, totalDibayar, totalPending } =
+    useMemo(() => {
+      const tersaring = expenses.filter((item) => {
+        const cocokKataKunci = item.deskripsi
+          .toLowerCase()
+          .includes(kataKunci.toLowerCase());
+        const cocokKategori =
+          filterKategori === "Semua" || item.kategori === filterKategori;
+        return cocokKataKunci && cocokKategori;
+      });
 
-  // FUNGSI KONVERSI DINAMIS
-  const convertAndFormat = (rawIdr: number) => {
-    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
-    return formatCurrency(finalValue, mataUang);
-  };
+      let pengeluaran = 0,
+        dibayar = 0,
+        pending = 0;
 
-  // FILTERING DATA
-  const dataTersaring = useMemo(() => {
-    return expenses.filter((item) => {
-      const cocokKataKunci = item.deskripsi
-        .toLowerCase()
-        .includes(kataKunci.toLowerCase());
-      const cocokKategori =
-        filterKategori === "Semua" || item.kategori === filterKategori;
-      return cocokKataKunci && cocokKategori;
-    });
-  }, [expenses, kataKunci, filterKategori]);
+      // Jangan gunakan perbandingan yang bertabrakan
+      expenses.forEach((e) => {
+        const jumlahNum =
+          typeof e.jumlah === "string" ? parseFloat(e.jumlah) : e.jumlah;
+        pengeluaran += jumlahNum;
 
-  // HITUNG TOTAL METRIK
-  const totalPengeluaran = expenses.reduce((acc, curr) => acc + curr.jumlah, 0);
-  const totalDibayar = expenses
-    .filter((e) => e.status === "Dibayar")
-    .reduce((acc, curr) => acc + curr.jumlah, 0);
-  const totalPending = expenses
-    .filter((e) => e.status === "Pending")
-    .reduce((acc, curr) => acc + curr.jumlah, 0);
+        // Gunakan kondisi yang menangani status yang benar
+        if (e.status === "Dibayar" || e.status === "Lunas") {
+          dibayar += jumlahNum;
+        } else if (e.status === "Pending") {
+          pending += jumlahNum;
+        }
+      });
+
+      return {
+        dataTersaring: tersaring,
+        totalPengeluaran: pengeluaran,
+        totalDibayar: dibayar,
+        totalPending: pending,
+      };
+    }, [expenses, kataKunci, filterKategori]);
+
+  const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
+  const indexAwal = (halamanSaatIni - 1) * itemPerHalaman;
+  const dataTampil = dataTersaring.slice(indexAwal, indexAwal + itemPerHalaman);
 
   const bukaFormTambah = () => {
     setFormMode("tambah");
     setFormData({
-      id: `EXP-${String(expenses.length + 1).padStart(3, "0")}`,
+      id: `EXP-${Date.now().toString().slice(-6)}`,
       deskripsi: "",
       kategori: "Operasional",
       jumlah: 0,
@@ -147,38 +149,42 @@ export default function ExpensePage() {
     setIsDialogOpen(true);
   };
 
+  // 2. FUNGSI SIMPAN MENGGUNAKAN ACTIONS ZUSTAND
   const handleSimpan = () => {
-    if (!formData.deskripsi || formData.jumlah <= 0 || !formData.tanggal) {
+    if (
+      !formData.deskripsi ||
+      Number(formData.jumlah) <= 0 ||
+      !formData.tanggal
+    ) {
       toast.error("Mohon isi semua kolom formulir dengan benar!");
       return;
     }
 
     if (formMode === "tambah") {
-      setExpenses([formData, ...expenses]);
+      addExpense(formData);
       toast.success("Pengeluaran baru berhasil dicatat.");
     } else {
-      setExpenses(expenses.map((e) => (e.id === formData.id ? formData : e)));
+      updateExpense(formData.id, formData);
       toast.success("Catatan pengeluaran berhasil diperbarui.");
     }
     setIsDialogOpen(false);
   };
 
-  const konfirmasiHapus = (id: string) => {
-    setIdYangDihapus(id);
-    setIsDeleteOpen(true);
-  };
-
+  // 3. FUNGSI HAPUS MENGGUNAKAN ACTIONS ZUSTAND
   const eksekusiHapus = () => {
     if (idYangDihapus) {
-      setExpenses(expenses.filter((e) => e.id !== idYangDihapus));
+      deleteExpense(idYangDihapus);
+      if (dataTampil.length === 1 && halamanSaatIni > 1) {
+        setHalamanSaatIni(halamanSaatIni - 1);
+      }
       toast.success("Catatan pengeluaran telah dihapus.");
     }
     setIsDeleteOpen(false);
+    setIdYangDihapus(null);
   };
 
   return (
     <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-10 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HEADER SECTION */}
       <div className="flex flex-col items-start space-y-3 mt-2">
         <Badge
           variant="secondary"
@@ -195,144 +201,191 @@ export default function ExpensePage() {
         </p>
       </div>
 
-      {/* METRIC CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Metric Cards */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-red-500/10 text-red-500 rounded-xl w-fit mb-3">
             <TrendingDown className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {convertAndFormat(totalPengeluaran)}
+          <div className="text-3xl font-bold">
+            {convertAndFormatCurrency(totalPengeluaran, mataUang)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Total Akumulasi Pengeluaran
+            Total Pengeluaran
           </div>
         </div>
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl w-fit mb-3">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {convertAndFormat(totalDibayar)}
+          <div className="text-3xl font-bold">
+            {convertAndFormatCurrency(totalDibayar, mataUang)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Telah Terbayar (Lunas)
+            Telah Terbayar
           </div>
         </div>
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm">
           <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl w-fit mb-3">
             <Clock className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {convertAndFormat(totalPending)}
+          <div className="text-3xl font-bold">
+            {convertAndFormatCurrency(totalPending, mataUang)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Tagihan Tertunda (Pending)
+            Tertunda (Pending)
           </div>
         </div>
       </div>
 
-      {/* FILTERS AND TABLE */}
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
-          <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 p-4 border rounded-2xl bg-card shadow-sm">
+          <div className="flex flex-1 gap-3">
             <div className="relative md:max-w-xs w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Cari deskripsi pengeluaran..."
                 value={kataKunci}
-                onChange={(e) => setKataKunci(e.target.value)}
-                className="pl-9 rounded-xl w-full"
+                onChange={(e) => {
+                  setKataKunci(e.target.value);
+                  setHalamanSaatIni(1);
+                }}
+                className="pl-9 rounded-xl w-full h-10"
               />
             </div>
-            <Select value={filterKategori} onValueChange={setFilterKategori}>
-              <SelectTrigger className="w-full sm:w-[180px] rounded-xl">
-                <SelectValue placeholder="Pilih Kategori" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="Semua">Semua Kategori</SelectItem>
-                <SelectItem value="Operasional">Operasional</SelectItem>
-                <SelectItem value="Tools/Software">Tools/Software</SelectItem>
-                <SelectItem value="Pemasaran">Pemasaran</SelectItem>
-                <SelectItem value="Gaji/Upah">Gaji/Upah</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover
+              open={openFilterKategori}
+              onOpenChange={setOpenFilterKategori}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openFilterKategori}
+                  className="w-[180px] justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                >
+                  <span className="truncate">
+                    {filterKategori === "Semua"
+                      ? "Semua Kategori"
+                      : filterKategori}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[180px] p-0 rounded-xl shadow-lg border-border/60"
+                align="end"
+              >
+                <Command>
+                  <CommandList>
+                    <CommandEmpty>Kategori tidak ditemukan.</CommandEmpty>
+                    <CommandGroup>
+                      {[
+                        { label: "Semua Kategori", value: "Semua" },
+                        { label: "Operasional", value: "Operasional" },
+                        { label: "Tools/Software", value: "Tools/Software" },
+                        { label: "Pemasaran", value: "Pemasaran" },
+                        { label: "Gaji/Upah", value: "Gaji/Upah" },
+                      ].map((item) => (
+                        <CommandItem
+                          key={item.value}
+                          onSelect={() => {
+                            setFilterKategori(item.value);
+                            setHalamanSaatIni(1);
+                            setOpenFilterKategori(false);
+                          }}
+                          className="rounded-lg cursor-pointer my-0.5 font-medium"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-primary shrink-0",
+                              filterKategori === item.value
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">{item.label}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <Button
             onClick={bukaFormTambah}
-            className="rounded-xl shrink-0 gap-2 shadow-sm cursor-pointer"
+            className="rounded-xl gap-2 shadow-sm cursor-pointer h-10 font-semibold"
           >
             <Plus className="w-4 h-4" /> Catat Pengeluaran
           </Button>
         </div>
 
-        {/* DATA TABLE WRAPPER */}
         <div className="border rounded-2xl bg-card shadow-sm overflow-hidden overflow-x-auto">
           <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="font-semibold">ID / Deskripsi</TableHead>
-                <TableHead className="font-semibold">Kategori</TableHead>
-                <TableHead className="font-semibold">Tanggal</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="text-right font-semibold">
+                <TableHead>ID / Deskripsi</TableHead>
+                <TableHead>Kategori</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">
                   Jumlah ({mataUang})
                 </TableHead>
-                <TableHead className="text-center w-32 font-semibold">
-                  Aksi
-                </TableHead>
+                <TableHead className="text-center w-32">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dataTersaring.length === 0 ? (
+              {dataTampil.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="text-center h-32 text-muted-foreground"
+                    className="text-center py-10 text-muted-foreground"
                   >
-                    Belum ada pengeluaran yang tercatat.
+                    Tidak ada data pengeluaran ditemukan.
                   </TableCell>
                 </TableRow>
               ) : (
-                dataTersaring.map((item) => (
+                dataTampil.map((item) => (
                   <TableRow
                     key={item.id}
                     className="hover:bg-muted/40 transition-colors"
                   >
                     <TableCell>
                       <div>
-                        <div className="font-bold text-foreground">
-                          {item.deskripsi}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
+                        <div className="font-bold">{item.deskripsi}</div>
+                        <div className="text-xs text-muted-foreground">
                           {item.id}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground">
-                        <Tag className="w-3.5 h-3.5 text-primary" />{" "}
-                        {item.kategori}
-                      </span>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20">
+                        <Tag className="w-3 h-3" /> {item.kategori}
+                      </div>
                     </TableCell>
+
                     <TableCell>
                       <span className="text-sm flex items-center gap-1.5 text-muted-foreground">
-                        <Calendar className="w-3.5 h-3.5" /> {item.tanggal}
+                        <CalendarIcon className="w-3.5 h-3.5" /> {item.tanggal}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={
-                          item.status === "Dibayar"
-                            ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400 border-0 font-semibold shadow-none"
-                            : "bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400 border-0 font-semibold shadow-none"
-                        }
+                      <div
+                        className={cn(
+                          "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border",
+                          item.status === "Dibayar" || item.status === "Dibayar"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            : item.status === "Pending"
+                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                              : "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+                        )}
                       >
                         {item.status}
-                      </Badge>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right font-bold text-foreground">
-                      {convertAndFormat(item.jumlah)}
+                    <TableCell className="text-right font-bold">
+                      {convertAndFormatCurrency(Number(item.jumlah), mataUang)}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -340,15 +393,18 @@ export default function ExpensePage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => bukaFormEdit(item)}
-                          className="h-8 w-8 text-blue-600 rounded-lg hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                          className="h-8 w-8 text-blue-600 hover:bg-blue-50"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => konfirmasiHapus(item.id)}
-                          className="h-8 w-8 text-red-600 rounded-lg hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                          onClick={() => {
+                            setIdYangDihapus(item.id);
+                            setIsDeleteOpen(true);
+                          }}
+                          className="h-8 w-8 text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -360,180 +416,267 @@ export default function ExpensePage() {
             </TableBody>
           </Table>
         </div>
+
+        <CustomPagination
+          halamanSaatIni={halamanSaatIni}
+          setHalamanSaatIni={setHalamanSaatIni}
+          totalHalaman={totalHalaman}
+          itemPerHalaman={itemPerHalaman}
+          setItemPerHalaman={setItemPerHalaman}
+        />
       </div>
 
-      {/* DIALOG FORM */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[450px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
-          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60"></div>
-          <div className="p-6">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl font-bold">
-                {formMode === "tambah"
-                  ? "Catat Biaya Baru"
-                  : "Edit Catatan Biaya"}
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                Pastikan data pengeluaran diisi secara akurat untuk integrasi
-                laporan keuangan.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[500px] sm:rounded-[1.5rem] p-0 overflow-hidden border border-border/50 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="h-2 w-full bg-gradient-to-r from-primary to-primary/60 shrink-0"></div>
 
-            <div className="grid gap-5 py-2">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="text-2xl font-bold tracking-tight">
+              {formMode === "tambah"
+                ? "Catat Biaya Baru"
+                : "Edit Catatan Biaya"}
+            </DialogTitle>
+            <DialogDescription>
+              Isi formulir di bawah ini untuk mengelola riwayat pengeluaran kas
+              operasional bisnis Anda.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-5">
+            <div className="grid gap-2">
+              <Label className="font-semibold">Deskripsi Pengeluaran</Label>
+              <Input
+                placeholder="Contoh: Pembelian lisensi software / Makan siang..."
+                value={formData.deskripsi}
+                onChange={(e) =>
+                  setFormData({ ...formData, deskripsi: e.target.value })
+                }
+                className="rounded-xl h-10 border-border/50"
+              />
+            </div>
+
+            {/* KATEGORI & STATUS PENGELUARAN */}
+            <div className="grid md:grid-cols-2 gap-5">
               <div className="grid gap-2">
-                <Label htmlFor="deskripsi" className="font-semibold">
-                  Deskripsi Pengeluaran
+                <Label className="font-semibold text-foreground/90">
+                  Kategori
                 </Label>
-                <Input
-                  id="deskripsi"
-                  placeholder="Contoh: Langganan Server Hosting"
-                  value={formData.deskripsi}
-                  onChange={(e) =>
-                    setFormData({ ...formData, deskripsi: e.target.value })
-                  }
-                  className="rounded-xl h-10"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="kategori" className="font-semibold">
-                    Kategori
-                  </Label>
-                  <Select
-                    value={formData.kategori}
-                    onValueChange={(val) =>
-                      setFormData({ ...formData, kategori: val })
-                    }
+                <Popover
+                  open={openComboboxKategori}
+                  onOpenChange={setOpenComboboxKategori}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openComboboxKategori}
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                    >
+                      {formData.kategori || (
+                        <span className="text-muted-foreground">
+                          Pilih kategori...
+                        </span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg border-border/60"
+                    align="start"
                   >
-                    <SelectTrigger id="kategori" className="rounded-xl h-10">
-                      <SelectValue placeholder="Pilih Kategori" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Operasional">Operasional</SelectItem>
-                      <SelectItem value="Tools/Software">
-                        Tools/Software
-                      </SelectItem>
-                      <SelectItem value="Pemasaran">Pemasaran</SelectItem>
-                      <SelectItem value="Gaji/Upah">Gaji/Upah</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>Kategori tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {[
+                            { label: "Operasional", value: "Operasional" },
+                            { label: "Tools", value: "Tools/Software" },
+                            { label: "Pemasaran", value: "Pemasaran" },
+                            { label: "Gaji", value: "Gaji/Upah" },
+                          ].map((item) => (
+                            <CommandItem
+                              key={item.value}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  kategori: item.value,
+                                });
+                                setOpenComboboxKategori(false);
+                              }}
+                              className="rounded-lg cursor-pointer my-0.5 font-medium"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-primary",
+                                  formData.kategori === item.value
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {item.label}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="status" className="font-semibold">
-                    Status
-                  </Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(val) =>
-                      setFormData({
-                        ...formData,
-                        status: val as "Dibayar" | "Pending",
-                      })
-                    }
+              <div className="grid gap-2">
+                <Label className="font-semibold text-foreground/90">
+                  Status
+                </Label>
+                <Popover
+                  open={openComboboxStatus}
+                  onOpenChange={setOpenComboboxStatus}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openComboboxStatus}
+                      className="w-full justify-between font-normal rounded-xl h-10 border-border/60 bg-background shadow-sm hover:border-primary/40 hover:bg-muted/20 transition-all"
+                    >
+                      {formData.status || (
+                        <span className="text-muted-foreground">
+                          Pilih status...
+                        </span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg border-border/60"
+                    align="start"
                   >
-                    <SelectTrigger id="status" className="rounded-xl h-10">
-                      <SelectValue placeholder="Pilih Status" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="Dibayar">Dibayar</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="jumlah" className="font-semibold">
-                  Jumlah Biaya (Mata Uang Dasar: IDR)
-                </Label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70 pointer-events-none select-none">
-                    Rp
-                  </div>
-                  <Input
-                    id="jumlah"
-                    type="number"
-                    placeholder="0"
-                    value={formData.jumlah || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        jumlah: Number(e.target.value),
-                      })
-                    }
-                    className="rounded-xl pl-10 pr-4 h-10 font-bold font-mono text-base"
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground/80 pl-1 leading-relaxed mt-0.5">
-                  * Masukkan angka murni tanpa pemisah. Nilai akan otomatis
-                  terkonversi menjadi{" "}
-                  <span className="font-bold text-foreground">{mataUang}</span>{" "}
-                  di tabel berdasarkan pengaturan Anda.
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="tanggal" className="font-semibold">
-                  Tanggal
-                </Label>
-                <Input
-                  id="tanggal"
-                  type="date"
-                  value={formData.tanggal}
-                  onChange={(e) =>
-                    setFormData({ ...formData, tanggal: e.target.value })
-                  }
-                  className="rounded-xl h-10"
-                />
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>Status tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {["Dibayar", "Pending"].map((status) => (
+                            <CommandItem
+                              key={status}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  status: status as any,
+                                });
+                                setOpenComboboxStatus(false);
+                              }}
+                              className="rounded-lg cursor-pointer my-0.5 font-medium"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-primary",
+                                  formData.status === status
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {status}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
-            <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
-                className="rounded-xl w-full sm:w-auto font-medium"
-              >
-                Batal
-              </Button>
-              <Button
-                onClick={handleSimpan}
-                className="rounded-xl shadow-md w-full sm:w-auto font-bold"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan Catatan
-              </Button>
-            </DialogFooter>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Jumlah Biaya</Label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 text-sm font-bold text-muted-foreground/70">
+                  Rp
+                </div>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={formData.jumlah || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      jumlah: Number(e.target.value),
+                    })
+                  }
+                  className="rounded-xl pl-10 h-10 font-bold font-mono text-base border-border/50"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label className="font-semibold">Tanggal</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal rounded-xl h-10 border-border/50",
+                      !formData.tanggal && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.tanggal ? (
+                      format(new Date(formData.tanggal), "PPP", { locale: id })
+                    ) : (
+                      <span>Pilih tanggal</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-xl" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={
+                      formData.tanggal ? new Date(formData.tanggal) : undefined
+                    }
+                    onSelect={(d) => {
+                      if (d) {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, "0");
+                        const day = String(d.getDate()).padStart(2, "0");
+                        setFormData({
+                          ...formData,
+                          tanggal: `${y}-${m}-${day}`,
+                        });
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
+
+          <DialogFooter className="px-6 pt-4 pb-8 border-t border-border/50 bg-muted/10 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-xl font-medium h-10"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleSimpan}
+              className="rounded-xl shadow-md font-bold h-10"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ALERT DELETE */}
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <AlertDialogContent className="sm:rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="w-5 h-5" /> Hapus Catatan Pengeluaran?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Tindakan ini permanen. Riwayat pengeluaran yang dihapus tidak akan
-              dapat dihitung kembali dalam kalkulasi rugi-laba tahunan.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <AlertDialogCancel className="rounded-xl w-full sm:w-auto mt-0">
-              Batal
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={eksekusiHapus}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-xl w-full sm:w-auto"
-            >
-              Ya, Hapus
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* IMPLEMENTASI CONFIRM DELETE MODAL */}
+      <ConfirmDeleteModal
+        isOpen={isDeleteOpen}
+        onClose={() => {
+          setIsDeleteOpen(false);
+          setIdYangDihapus(null);
+        }}
+        onConfirm={eksekusiHapus}
+        title="Hapus Catatan Pengeluaran?"
+        description="Tindakan ini permanen. Riwayat pengeluaran yang dihapus tidak akan dapat dihitung kembali dalam kalkulasi rugi-laba tahunan."
+      />
     </div>
   );
 }
