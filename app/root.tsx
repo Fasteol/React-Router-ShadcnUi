@@ -13,7 +13,7 @@ import { cn } from "~/lib/utils";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Button } from "~/components/ui/button";
-import { ThemeProvider } from "~/components/theme-provider";
+import { ThemeProvider, useTheme } from "~/components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
 
 // Import Komponen Sidebar Primitives dari Shadcn UI
@@ -28,7 +28,17 @@ import {
 } from "~/components/ui/sidebar";
 
 // Import Ikon dari Lucide Icons
-import { Menu, LayoutDashboard, ReceiptText, Info } from "lucide-react";
+import {
+  Menu,
+  LayoutDashboard,
+  ReceiptText,
+  Info,
+  Settings,
+  BarChart3,
+  Moon,
+  Sun,
+  User,
+} from "lucide-react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -72,75 +82,117 @@ export function Layout({ children }: { children: React.ReactNode }) {
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { toggleSidebar } = useSidebar();
-
-  // Helper untuk mendeteksi halaman aktif
   const isActive = (path: string) => location.pathname === path;
+  const { theme, setTheme } = useTheme();
 
-  // Struktur data navigasi agar terpusat dan rapi
   const navItems = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
     { name: "Transaction", path: "/transaction", icon: ReceiptText },
     { name: "About", path: "/about", icon: Info },
+    { name: "Reports", path: "/report", icon: BarChart3 },
+    { name: "Settings", path: "/setting", icon: Settings },
   ];
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
-      {/* === HEADER / NAVBAR GLOBAL (DESKTOP & MOBILE) === */}
-      <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 items-center px-4 justify-between">
-          {/* Sisi Kiri: Hanya Logo */}
+    <div className="flex min-h-screen w-full">
+      {/* === SIDEBAR DESKTOP (Permanen) === */}
+      <aside className="hidden md:flex w-64 border-r bg-background flex-col fixed inset-y-0 z-50">
+        <div className="p-6 h-16 flex items-center border-b">
           <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground p-1 rounded-sm">
-              <span className="font-bold text-xs">LR</span>
+            <div className="bg-primary text-primary-foreground p-1.5 rounded-md font-bold text-xs">
+              BLY
             </div>
-            <span className="font-bold inline-block">LearnReact</span>
-          </div>
-
-          {/* Sisi Kanan: Navigasi Desktop & Tombol Hamburger Menu */}
-          <div className="flex items-center gap-4">
-            {/* Navigasi Desktop (Dipindah ke sini) */}
-            <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "transition-colors hover:text-foreground/80 px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium",
-                    isActive(item.path)
-                      ? "text-foreground bg-secondary font-semibold"
-                      : "text-foreground/60",
-                  )}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
-
-            {/* Tombol Hamburger Menu */}
-            <div className="md:hidden">
-              <Button variant="ghost" size="icon" onClick={toggleSidebar}>
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle Menu</span>
-              </Button>
-            </div>
+            <span className="font-bold text-lg">Billify</span>
           </div>
         </div>
-      </header>
+        <div className="flex-1 overflow-y-auto p-4">
+          <nav className="space-y-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all",
+                  isActive(item.path)
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </aside>
 
-      {/* === SIDEBAR RESMI SHADCN UI (HANYA AKTIF DI MOBILE) === */}
-      {/* Mengubah side="left" menjadi side="right" agar serasi dengan posisi tombol */}
-      <Sidebar side="right" className="md:hidden">
-        <SidebarContent className="p-4 pt-6">
-          {/* Header Internal Sidebar */}
-          <div className="flex items-center gap-2 mb-6 px-2">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded-lg font-bold text-xs">
-              LR
-            </div>
-            <span className="font-bold text-lg">LearnReact</span>
+      {/* === KONTEN UTAMA === */}
+      <div className="flex-1 flex flex-col md:pl-64">
+        <header className="sticky top-0 z-40 h-16 border-b bg-background/95 backdrop-blur px-4 flex items-center justify-between">
+          {/* Sisi Kiri: Breadcrumb / Nama Halaman Aktif */}
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={toggleSidebar}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <span className="text-sm font-semibold text-foreground">
+              {navItems.find((i) => i.path === location.pathname)?.name ||
+                "Billify"}
+            </span>
           </div>
 
-          {/* Menu Navigasi dengan Highlight bawaan Shadcn */}
+          {/* Sisi Kanan: Preferensi & Profil */}
+          <div className="flex items-center gap-2">
+            {/* Toggle Theme: Sekarang sudah fungsional */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full w-9 h-9"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+
+            {/* Profil User (Simbolis) */}
+            <div className="flex items-center gap-2 pl-2">
+              <div className="hidden md:flex flex-col items-end mr-1">
+                <span className="text-xs font-medium leading-none">Admin</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Razan Sya'bani
+                </span>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
+                <User className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* MAIN AREA */}
+        <main className="flex-1 p-6 md:p-10 max-w-5xl w-full mx-auto">
+          {children}
+        </main>
+
+        <footer className="border-t py-6 text-center text-sm text-muted-foreground bg-muted/20">
+          &copy; {new Date().getFullYear()} Billify. All rights reserved.
+        </footer>
+      </div>
+
+      {/* === SIDEBAR MOBILE (Drawer) === */}
+      <Sidebar side="left" className="md:hidden">
+        <SidebarContent className="p-4 pt-6">
+          <div className="flex items-center gap-2 mb-6 px-2">
+            <div className="bg-primary text-primary-foreground p-1.5 rounded-lg font-bold text-xs">
+              BLY
+            </div>
+            <span className="font-bold text-lg">Billify</span>
+          </div>
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.path}>
@@ -155,16 +207,6 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
       </Sidebar>
-
-      {/* === MAIN CONTENT AREA === */}
-      <main className="flex-1 container mx-auto p-4 flex flex-col">
-        {children}
-      </main>
-
-      {/* === FOOTER GLOBAL === */}
-      <footer className="border-t py-6 text-center text-sm text-muted-foreground bg-muted/50">
-        &copy; {new Date().getFullYear()} LearnReact. All rights reserved.
-      </footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { dataAwal, type Invoice } from "~/data/invoices";
+import { dataAwal } from "~/data/invoices"; // Pastikan path ini sesuai
 import {
   Pagination,
   PaginationContent,
@@ -42,8 +42,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { toast } from "sonner";
-
-// IMPORT KOMPONEN SELECT SHADCN UI
 import {
   Select,
   SelectContent,
@@ -52,62 +50,92 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 
-export default function Home() {
+// ==========================================
+// TIPE DATA KLIEN
+// ==========================================
+export type Client = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  status: "Aktif" | "Non-aktif";
+  totalInvoices: number;
+};
+
+// ==========================================
+// LOGIKA EKSTRAKSI AWAL (DARI INVOICE)
+// ==========================================
+const extractInitialClients = (): Client[] => {
+  const clientMap = new Map<string, Client>();
+  dataAwal.forEach((inv) => {
+    if (!clientMap.has(inv.clientEmail)) {
+      clientMap.set(inv.clientEmail, {
+        id: `CL-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+        name: inv.clientName,
+        email: inv.clientEmail,
+        phone: "-",
+        status: "Aktif",
+        totalInvoices: 1,
+      });
+    } else {
+      const existingClient = clientMap.get(inv.clientEmail)!;
+      existingClient.totalInvoices += 1;
+    }
+  });
+  return Array.from(clientMap.values());
+};
+
+export default function ClientsPage() {
   const navigate = useNavigate();
 
-  const [invoices, setInvoices] = useState(dataAwal);
+  // ==========================================
+  // STATE UTAMA (MENIRU HOME.TSX)
+  // ==========================================
+  const [clients, setClients] = useState<Client[]>(extractInitialClients());
   const [kataKunci, setKataKunci] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Semua"); // State Filter Kategori
+  const [filterStatus, setFilterStatus] = useState("Semua");
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
-  const [itemPerHalaman, setItemPerHalaman] = useState(10); // State Limit Data (Dinamis)
+  const [itemPerHalaman, setItemPerHalaman] = useState(10);
 
   // ==========================================
   // STATE UNTUK DIALOG & FORM
   // ==========================================
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
-  const [formData, setFormData] = useState<Invoice>({
+  const [formData, setFormData] = useState<Client>({
     id: "",
-    invoice: "",
-    clientName: "",
-    clientEmail: "",
-    paymentStatus: "",
-    paymentMethod: "",
-    totalAmount: "",
-    date: "",
-    dueDate: "",
+    name: "",
+    email: "",
+    phone: "",
+    status: "Aktif",
+    totalInvoices: 0,
   });
 
-  // Perbaikan bug deklarasi ganda dari kode sebelumnya
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
 
   // ==========================================
   // LOGIKA MENGHITUNG CARD & FILTER DATA
   // ==========================================
-  const dataTersaring = invoices.filter((item) => {
+  const dataTersaring = clients.filter((item) => {
     const cocokKataKunci =
-      item.invoice.toLowerCase().includes(kataKunci.toLowerCase()) ||
-      item.clientName.toLowerCase().includes(kataKunci.toLowerCase());
+      item.name.toLowerCase().includes(kataKunci.toLowerCase()) ||
+      item.email.toLowerCase().includes(kataKunci.toLowerCase());
 
     const cocokStatus =
-      filterStatus === "Semua" || item.paymentStatus === filterStatus;
+      filterStatus === "Semua" || item.status === filterStatus;
 
     return cocokKataKunci && cocokStatus;
   });
 
-  const dataLunas = invoices.filter(
-    (item) => item.paymentStatus === "Lunas",
+  const dataAktif = clients.filter((item) => item.status === "Aktif").length;
+  const dataNonAktif = clients.filter(
+    (item) => item.status === "Non-aktif",
   ).length;
-  const dataPending = invoices.filter(
-    (item) => item.paymentStatus === "Pending",
-  ).length;
-  const dataBelumBayar = invoices.filter(
-    (item) => item.paymentStatus === "Belum Bayar",
-  ).length;
-  const dataGagal = invoices.filter(
-    (item) => item.paymentStatus === "Gagal",
-  ).length;
+  const totalTransaksi = clients.reduce(
+    (acc, curr) => acc + curr.totalInvoices,
+    0,
+  );
 
   // LOGIKA PAGINATION
   const totalHalaman = Math.ceil(dataTersaring.length / itemPerHalaman);
@@ -119,94 +147,67 @@ export default function Home() {
   // FUNGSI AKSI (TAMBAH, EDIT, HAPUS)
   // ==========================================
   const bukaFormTambah = () => {
-    const tglDibuat = new Date().toISOString().split("T")[0];
-    const dateObj = new Date(tglDibuat);
-    dateObj.setDate(dateObj.getDate() + 14);
-    const tglJatuhTempo = dateObj.toISOString().split("T")[0];
-
     setFormMode("tambah");
     setFormData({
-      id: `id-${Date.now()}`,
-      invoice: "",
-      clientName: "",
-      clientEmail: "",
-      paymentStatus: "Pending",
-      paymentMethod: "Transfer Bank",
-      totalAmount: "Rp ",
-      date: tglDibuat,
-      dueDate: tglJatuhTempo,
+      id: `CL-${Date.now()}`,
+      name: "",
+      email: "",
+      phone: "",
+      status: "Aktif",
+      totalInvoices: 0,
     });
     setIsDialogOpen(true);
   };
 
-  const bukaFormEdit = (dataAsli: Invoice) => {
+  const bukaFormEdit = (dataAsli: Client) => {
     setFormMode("edit");
     setFormData(dataAsli);
     setIsDialogOpen(true);
   };
 
   const handleSimpan = () => {
-    if (
-      !formData.invoice ||
-      !formData.clientName ||
-      !formData.paymentStatus ||
-      !formData.totalAmount ||
-      formData.totalAmount === "Rp "
-    ) {
-      toast.error("Gagal! Kolom utama wajib diisi dengan benar.");
+    if (!formData.name || !formData.email) {
+      toast.error("Gagal! Nama dan Email klien wajib diisi.");
       return;
     }
 
     if (formMode === "tambah") {
-      const isExist = invoices.some(
-        (item) => item.invoice === formData.invoice,
-      );
+      const isExist = clients.some((item) => item.email === formData.email);
       if (isExist) {
-        toast.error(`Gagal! Invoice ${formData.invoice} sudah digunakan.`);
+        toast.error(`Gagal! Email ${formData.email} sudah terdaftar.`);
         return;
       }
-      setInvoices([formData, ...invoices]);
-      toast.success(`Berhasil menambahkan invoice ${formData.invoice}!`);
+      setClients([formData, ...clients]);
+      toast.success(`Berhasil menambahkan klien ${formData.name}!`);
     } else {
-      const dataBaru = invoices.map((item) =>
-        item.invoice === formData.invoice ? formData : item,
+      const dataBaru = clients.map((item) =>
+        item.id === formData.id ? formData : item,
       );
-      setInvoices(dataBaru);
-      toast.success(`Berhasil memperbarui invoice ${formData.invoice}!`);
+      setClients(dataBaru);
+      toast.success(`Berhasil memperbarui klien ${formData.name}!`);
     }
 
     setIsDialogOpen(false);
   };
 
-  const konfirmasiHapus = (idInvoice: string) => {
-    setIdYangDihapus(idInvoice);
+  const konfirmasiHapus = (idKlien: string) => {
+    setIdYangDihapus(idKlien);
     setIsDeleteDialogOpen(true);
   };
 
   const eksekusiHapus = () => {
     if (idYangDihapus) {
-      const dataBaru = invoices.filter(
-        (item) => item.invoice !== idYangDihapus,
-      );
-      setInvoices(dataBaru);
+      const klienTerhapus = clients.find((c) => c.id === idYangDihapus);
+      const dataBaru = clients.filter((item) => item.id !== idYangDihapus);
+      setClients(dataBaru);
 
       if (dataTampil.length === 1 && halamanSaatIni > 1) {
         setHalamanSaatIni(halamanSaatIni - 1);
       }
-      toast.success(`Invoice ${idYangDihapus} berhasil dihapus.`);
+      toast.success(`Klien ${klienTerhapus?.name} berhasil dihapus.`);
     }
     setIsDeleteDialogOpen(false);
     setIdYangDihapus(null);
-  };
-
-  const handleUbahNominal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const angkaSaja = e.target.value.replace(/[^0-9]/g, "");
-    if (angkaSaja === "") {
-      setFormData({ ...formData, totalAmount: "Rp " });
-    } else {
-      const formatRupiah = parseInt(angkaSaja, 10).toLocaleString("id-ID");
-      setFormData({ ...formData, totalAmount: `Rp ${formatRupiah}` });
-    }
   };
 
   const renderPaginationItems = () => {
@@ -269,22 +270,22 @@ export default function Home() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Daftar Transaksi</h1>
-        <p className="text-muted-foreground mt-1">Daftar transaksi terbaru.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Daftar Klien</h1>
+        <p className="text-muted-foreground mt-1">
+          Kelola data pelanggan dan perusahaan.
+        </p>
       </div>
 
-      {/* Tampilan Grid Atas */}
-      <div className="grid gap-4 lg:grid-cols-5">
+      {/* Tampilan Grid Atas (Menyesuaikan dengan konteks Klien) */}
+      <div className="grid gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Transaksi
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Total Klien</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoices.length}</div>
+            <div className="text-2xl font-bold">{clients.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Keseluruhan invoice
+              Semua klien terdaftar
             </p>
           </CardContent>
         </Card>
@@ -292,27 +293,27 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-              Berhasil Lunas
+              Klien Aktif
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataLunas}</div>
+            <div className="text-2xl font-bold">{dataAktif}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Pembayaran diterima
+              Pelanggan aktif bertransaksi
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Pending
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Non-aktif
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataPending}</div>
+            <div className="text-2xl font-bold">{dataNonAktif}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Menunggu konfirmasi
+              Tidak ada aktivitas
             </p>
           </CardContent>
         </Card>
@@ -320,27 +321,13 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-sky-700 dark:text-sky-400">
-              Belum Bayar
+              Total Invoice Terikat
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dataBelumBayar}</div>
+            <div className="text-2xl font-bold">{totalTransaksi}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Belum ada transaksi
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">
-              Pembayaran Gagal
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dataGagal}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Gagal transaksi
+              Dari seluruh riwayat klien
             </p>
           </CardContent>
         </Card>
@@ -351,7 +338,7 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex flex-1 flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
-              placeholder="Cari nomor invoice atau nama klien..."
+              placeholder="Cari nama klien atau email..."
               value={kataKunci}
               onChange={(e) => {
                 setKataKunci(e.target.value);
@@ -360,7 +347,6 @@ export default function Home() {
               className="md:max-w-2xs rounded-md"
             />
 
-            {/* IMPLEMENTASI SELECT FILTER KATEGORI STATUS (SHADCN UI) */}
             <Select
               value={filterStatus}
               onValueChange={(val) => {
@@ -373,10 +359,8 @@ export default function Home() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Semua">Semua Status</SelectItem>
-                <SelectItem value="Lunas">Lunas</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Belum Bayar">Belum Bayar</SelectItem>
-                <SelectItem value="Gagal">Gagal</SelectItem>
+                <SelectItem value="Aktif">Aktif</SelectItem>
+                <SelectItem value="Non-aktif">Non-aktif</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -385,7 +369,7 @@ export default function Home() {
             onClick={bukaFormTambah}
             className="cursor-pointer rounded-md shrink-0"
           >
-            + Tambah Data
+            + Tambah Klien
           </Button>
         </div>
 
@@ -394,11 +378,10 @@ export default function Home() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-40">Invoice / Klien</TableHead>
+                <TableHead className="w-[300px]">Informasi Klien</TableHead>
+                <TableHead>Kontak</TableHead>
+                <TableHead>Total Invoice</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Metode</TableHead>
-                <TableHead>Tanggal / Batas</TableHead>
-                <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center w-40">Aksi</TableHead>
               </TableRow>
             </TableHeader>
@@ -406,55 +389,47 @@ export default function Home() {
               {dataTampil.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={5}
                     className="text-center h-24 text-muted-foreground"
                   >
-                    Tidak ada data ditemukan.
+                    Tidak ada data klien ditemukan.
                   </TableCell>
                 </TableRow>
               ) : (
-                dataTampil.map((invoice) => (
-                  <TableRow key={invoice.invoice}>
+                dataTampil.map((client) => (
+                  <TableRow key={client.id}>
                     <TableCell>
                       <div className="font-semibold text-foreground">
-                        {invoice.invoice}
+                        {client.name}
                       </div>
-                      <div className="text-xs text-muted-foreground max-w-[150px] truncate">
-                        {invoice.clientName}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{client.email}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {client.phone}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{client.totalInvoices}</div>
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={
-                          invoice.paymentStatus === "Lunas"
+                          client.status === "Aktif"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900 shadow-none"
-                            : invoice.paymentStatus === "Pending"
-                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900 shadow-none"
-                              : invoice.paymentStatus === "Belum Bayar"
-                                ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900 shadow-none"
-                                : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900 shadow-none"
+                            : "bg-muted text-muted-foreground shadow-none"
                         }
                       >
-                        {invoice.paymentStatus}
+                        {client.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell>{invoice.paymentMethod}</TableCell>
-                    <TableCell>
-                      <div className="text-xs font-medium">{invoice.date}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Hingga: {invoice.dueDate}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {invoice.totalAmount}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => bukaFormEdit(invoice)}
+                          onClick={() => bukaFormEdit(client)}
                           className="cursor-pointer"
                         >
                           Edit
@@ -462,7 +437,7 @@ export default function Home() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => konfirmasiHapus(invoice.invoice)}
+                          onClick={() => konfirmasiHapus(client.id)}
                           className="cursor-pointer"
                         >
                           Hapus
@@ -476,10 +451,9 @@ export default function Home() {
           </Table>
         </div>
 
-        {/* BOTTOM PAGINATION & LIMIT DATA CONTROLLER */}
+        {/* BOTTOM PAGINATION */}
         {totalHalaman > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 border-t mt-2">
-            {/* IMPLEMENTASI SELECT LIMIT DATA (SHADCN UI) */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Tampilkan</span>
               <Select
@@ -541,121 +515,87 @@ export default function Home() {
         )}
       </div>
 
-      {/* FORM DIALOG (TAMBAH / EDIT) */}
+      {/* FORM DIALOG (TAMBAH / EDIT KLIEN) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle>
-              {formMode === "tambah"
-                ? "Tambah Data Transaksi"
-                : "Edit Data Transaksi"}
+              {formMode === "tambah" ? "Tambah Klien Baru" : "Edit Data Klien"}
             </DialogTitle>
             <DialogDescription>
               {formMode === "tambah"
-                ? "Masukkan detail transaksi baru."
-                : "Ubah detail transaksi yang sudah ada."}
+                ? "Masukkan detail informasi klien baru."
+                : "Ubah detail informasi klien yang sudah ada."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            {/* Kode Invoice */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="invoice" className="text-right">
-                Invoice
+              <Label htmlFor="name" className="text-right">
+                Nama
               </Label>
               <Input
-                id="invoice"
-                placeholder="INVXXX"
-                value={formData.invoice}
+                id="name"
+                placeholder="Nama Lengkap / Perusahaan"
+                value={formData.name}
                 onChange={(e) =>
-                  setFormData({ ...formData, invoice: e.target.value })
-                }
-                className="col-span-3 rounded-md"
-                disabled={formMode === "edit"}
-              />
-            </div>
-
-            {/* Nama Klien (Sesuai update struktur data) */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="clientName" className="text-right">
-                Nama Klien
-              </Label>
-              <Input
-                id="clientName"
-                placeholder="Nama Perusahaan / Perorangan"
-                value={formData.clientName}
-                onChange={(e) =>
-                  setFormData({ ...formData, clientName: e.target.value })
+                  setFormData({ ...formData, name: e.target.value })
                 }
                 className="col-span-3 rounded-md"
               />
             </div>
 
-            {/* IMPLEMENTASI SHADCN SELECT UNTUK FORM STATUS */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="email@perusahaan.com"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                className="col-span-3 rounded-md"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="phone" className="text-right">
+                No. Telepon
+              </Label>
+              <Input
+                id="phone"
+                placeholder="08123456789"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+                className="col-span-3 rounded-md"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="statusKlien" className="text-right">
                 Status
               </Label>
               <div className="col-span-3">
                 <Select
-                  value={formData.paymentStatus}
-                  onValueChange={(val) =>
-                    setFormData({ ...formData, paymentStatus: val })
+                  value={formData.status}
+                  onValueChange={(val: "Aktif" | "Non-aktif") =>
+                    setFormData({ ...formData, status: val })
                   }
                 >
-                  <SelectTrigger id="status" className="w-full rounded-md">
+                  <SelectTrigger id="statusKlien" className="w-full rounded-md">
                     <SelectValue placeholder="Pilih Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Lunas">Lunas</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Belum Bayar">Belum Bayar</SelectItem>
-                    <SelectItem value="Gagal">Gagal</SelectItem>
+                    <SelectItem value="Aktif">Aktif</SelectItem>
+                    <SelectItem value="Non-aktif">Non-aktif</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* IMPLEMENTASI SHADCN SELECT UNTUK FORM METODE */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="metode" className="text-right">
-                Metode
-              </Label>
-              <div className="col-span-3">
-                <Select
-                  value={formData.paymentMethod}
-                  onValueChange={(val) =>
-                    setFormData({ ...formData, paymentMethod: val })
-                  }
-                >
-                  <SelectTrigger id="metode" className="w-full rounded-md">
-                    <SelectValue placeholder="Pilih Metode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Transfer Bank">Transfer Bank</SelectItem>
-                    <SelectItem value="GoPay">GoPay</SelectItem>
-                    <SelectItem value="Kartu Kredit">Kartu Kredit</SelectItem>
-                    <SelectItem value="OVO">OVO</SelectItem>
-                    <SelectItem value="Dana">Dana</SelectItem>
-                    <SelectItem value="ShopeePay">ShopeePay</SelectItem>
-                    <SelectItem value="QRIS">QRIS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Nominal Total */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="nominal" className="text-right">
-                Total
-              </Label>
-              <Input
-                id="nominal"
-                placeholder="Rp 0"
-                value={formData.totalAmount}
-                onChange={handleUbahNominal}
-                className="col-span-3 font-medium rounded-md"
-              />
             </div>
           </div>
 
@@ -674,7 +614,7 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {/* ALERT DIALOG DELETE */}
+      {/* ALERT DIALOG DELETE KLIEN */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
@@ -683,9 +623,8 @@ export default function Home() {
           <AlertDialogHeader>
             <AlertDialogTitle>Apakah kamu yakin?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tindakan ini tidak bisa dibatalkan. Data invoice{" "}
-              <strong>{idYangDihapus}</strong> akan dihapus secara permanen dari
-              sistem ini.
+              Data klien ini akan dihapus dari daftar. Transaksi yang terkait
+              dengan klien ini mungkin akan kehilangan referensi nama.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -699,7 +638,7 @@ export default function Home() {
               onClick={eksekusiHapus}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-md"
             >
-              Ya, Hapus Data
+              Ya, Hapus Klien
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
