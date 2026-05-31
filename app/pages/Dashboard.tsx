@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import {
+  ResponsiveContainer,
   Bar,
   BarChart,
   CartesianGrid,
@@ -334,7 +335,7 @@ export default function DashboardPage() {
       </div>
 
       {/* === BAGIAN TENGAH: CHARTS === */}
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-7 items-start">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-7 items-start">
         {/* GRAFIK BAR PENDAPATAN */}
         <Card className="shadow-sm rounded-xl border-border/60 lg:col-span-5 h-full flex flex-col">
           <CardHeader>
@@ -387,7 +388,6 @@ export default function DashboardPage() {
             </ChartContainer>
           </CardContent>
         </Card>
-
         {/* GRAFIK DONUT & TOP KLIEN */}
         <div className="lg:col-span-2 space-y-6 flex flex-col h-full">
           {/* Donut Chart Status */}
@@ -395,34 +395,36 @@ export default function DashboardPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Distribusi Status</CardTitle>
             </CardHeader>
-            <CardContent className="flex items-center justify-center h-[180px]">
-              <PieChart width={200} height={200}>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={2}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={STATUS_COLORS[entry.name] || "#94a3b8"}
-                    />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(value) => [`${value} Invoice`, "Jumlah"]}
-                  contentStyle={{
-                    borderRadius: "8px",
-                    border: "none",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                  }}
-                />
-              </PieChart>
+            <CardContent className="flex items-center justify-center h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart width={200} height={200}>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={70}
+                    paddingAngle={2}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={STATUS_COLORS[entry.name] || "#94a3b8"}
+                      />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(value) => [`${value} Invoice`, "Jumlah"]}
+                    contentStyle={{
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
@@ -439,13 +441,13 @@ export default function DashboardPage() {
                   key={i}
                   className="flex items-center justify-between gap-4"
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex items-center gap-3 overflow-hidden min-w-0">
                     <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                       {client.name.charAt(0)}
                     </div>
                     {/* truncate di sini untuk memastikan nama kepotong menjadi ... jika terlalu panjang */}
                     <span
-                      className="text-sm font-medium truncate"
+                      className="text-sm font-medium truncate min-w-0"
                       title={client.name}
                     >
                       {client.name}
