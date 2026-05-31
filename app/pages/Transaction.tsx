@@ -15,9 +15,12 @@ import {
   Search,
   Edit2,
   Trash2,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
+import { format } from "date-fns"; // Pastikan date-fns terinstal
+import { Calendar } from "~/components/ui/calendar";
 
 // IMPORT DATA DARI INVOICES.TS
 import {
@@ -177,6 +180,10 @@ export default function TransactionPage() {
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
+  const [bulanTanggalDibuat, setBulanTanggalDibuat] = useState<Date>(
+    new Date(),
+  );
+  const [bulanJatuhTempo, setBulanJatuhTempo] = useState<Date>(new Date());
 
   const [formData, setFormData] = useState<Invoice>({
     id: "",
@@ -193,6 +200,42 @@ export default function TransactionPage() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [idYangDihapus, setIdYangDihapus] = useState<string | null>(null);
+
+  // ==========================================
+  // LOGIKA TANGGAL OTOMATIS (NET 14)
+  // ==========================================
+  // Gunakan fungsi ini untuk menggantikan fungsi lama Anda
+  const handleTanggalDibuatChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const tanggalBaru = e.target.value; // Format: YYYY-MM-DD
+
+    if (tanggalBaru) {
+      // 1. Pecah string tanggal menjadi tahun, bulan, hari
+      const [year, month, day] = tanggalBaru.split("-").map(Number);
+
+      // 2. Buat objek tanggal baru tanpa efek zona waktu UTC
+      const dateObj = new Date(year, month - 1, day);
+
+      // 3. Tambahkan 14 hari
+      dateObj.setDate(dateObj.getDate() + 14);
+
+      // 4. Format manual kembali ke YYYY-MM-DD agar angka tidak bergeser
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dateObj.getDate()).padStart(2, "0");
+
+      const jatuhTempoOtomatis = `${y}-${m}-${d}`;
+
+      setFormData({
+        ...formData,
+        date: tanggalBaru,
+        dueDate: jatuhTempoOtomatis,
+      });
+    } else {
+      setFormData({ ...formData, date: "", dueDate: "" });
+    }
+  };
 
   // ==========================================
   // PENGGUNAAN USEMEMO UNTUK OPTIMASI FILTER
@@ -768,7 +811,7 @@ export default function TransactionPage() {
       </div>
 
       {/* ==========================================
-          FORM DIALOG (TAMBAH / EDIT) - DISEJAJARKAN DGN EXPENSE.TSX
+          FORM DIALOG (TAMBAH / EDIT)
       ========================================== */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[500px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
@@ -886,6 +929,128 @@ export default function TransactionPage() {
                     Email: {formData.clientEmail}
                   </p>
                 )}
+              </div>
+
+              {/* TANGGAL DIBUAT & JATUH TEMPO MENGGUNAKAN SHADCN INPUT & LABEL */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="grid gap-2">
+                  <Label className="font-semibold">Tanggal Dibuat</Label>
+                  <Popover
+                    onOpenChange={(open) => {
+                      // Saat popover dibuka, paksa bulan kalender sesuai dengan tanggal yang terpilih
+                      if (open && formData.date)
+                        setBulanTanggalDibuat(
+                          new Date(formData.date.replace(/-/g, "/")),
+                        );
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal rounded-xl h-10",
+                          !formData.date && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {formData.date ? (
+                          format(new Date(formData.date), "PPP")
+                        ) : (
+                          <span>Pilih tanggal</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 rounded-xl">
+                      <Calendar
+                        mode="single"
+                        selected={
+                          formData.date ? new Date(formData.date) : undefined
+                        }
+                        month={bulanTanggalDibuat} // <--- KUNCI: Paksa kalender menampilkan bulan ini
+                        onMonthChange={setBulanTanggalDibuat} // <--- Agar saat klik panah bulan tetap berpindah
+                        onSelect={(date) => {
+                          if (date) {
+                            // Pastikan formatnya benar-benar lokal
+                            const y = date.getFullYear();
+                            const m = String(date.getMonth() + 1).padStart(
+                              2,
+                              "0",
+                            );
+                            const d = String(date.getDate()).padStart(2, "0");
+                            const value = `${y}-${m}-${d}`;
+
+                            // Panggil handle yang sudah diperbaiki tadi
+                            handleTanggalDibuatChange({
+                              target: { value },
+                            } as any);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-semibold text-rose-500">
+                    Jatuh Tempo (Net 14)
+                  </Label>
+                  <Popover
+                    onOpenChange={(open) => {
+                      // Saat popover dibuka, paksa bulan kalender sesuai dengan tanggal yang terpilih
+                      if (open && formData.dueDate)
+                        setBulanJatuhTempo(
+                          new Date(formData.dueDate.replace(/-/g, "/")),
+                        );
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal rounded-xl h-10 bg-rose-500/5",
+                          !formData.dueDate && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 text-rose-500" />
+                        {formData.dueDate ? (
+                          format(new Date(formData.dueDate), "PPP")
+                        ) : (
+                          <span>Pilih tanggal</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 rounded-xl">
+                      <Calendar
+                        mode="single"
+                        selected={
+                          formData.dueDate
+                            ? new Date(formData.dueDate)
+                            : undefined
+                        }
+                        month={bulanJatuhTempo} // <--- KUNCI: Paksa kalender menampilkan bulan ini
+                        onMonthChange={setBulanJatuhTempo} // <--- Agar saat klik panah bulan tetap berpindah
+                        onSelect={(date) => {
+                          if (date) {
+                            // Pastikan formatnya benar-benar lokal
+                            const y = date.getFullYear();
+                            const m = String(date.getMonth() + 1).padStart(
+                              2,
+                              "0",
+                            );
+                            const d = String(date.getDate()).padStart(2, "0");
+                            const value = `${y}-${m}-${d}`;
+
+                            // Panggil handle yang sudah diperbaiki tadi
+                            handleTanggalDibuatChange({
+                              target: { value },
+                            } as any);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
               <div className="grid gap-2 p-4 rounded-xl border bg-muted/10 border-dashed">

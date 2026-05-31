@@ -43,6 +43,11 @@ export type AdminSettings = {
   perusahaan: {
     nama: string;
     alamat: string;
+    // Tambahan field baru agar TypeScript tidak error
+    telepon: string;
+    email: string;
+    npwp: string;
+    website: string;
   };
   rekening: {
     namaBank: string;
@@ -79,6 +84,11 @@ export const defaultAdminSettings: AdminSettings = {
   perusahaan: {
     nama: "Razan Web Studio",
     alamat: "Bandung, Jawa Barat",
+    // Tambahan nilai default (kosong/placeholder) untuk entitas bisnis
+    telepon: "(022) 1234567",
+    email: "hello@fauzansyabani.dev",
+    npwp: "00.000.000.0-000.000",
+    website: "www.fauzansyabani.dev",
   },
   rekening: {
     namaBank: "Bank Mandiri",

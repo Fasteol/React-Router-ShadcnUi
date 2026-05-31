@@ -1140,7 +1140,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center md:gap-4 gap-1 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
+                      <div className="flex items-center sm:gap-4 gap-1 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
                         <div className="font-bold text-sm">
                           {convertAndFormat(item.totalAmount)}
                         </div>
@@ -1150,7 +1150,7 @@ export default function DashboardPage() {
                           className="h-8 text-xs font-semibold rounded-md gap-1.5 flex items-center"
                           onClick={() => handleKirimEmailReminder(item)}
                         >
-                          <span className="hidden md:flex">Tindak Lanjuti</span>
+                          <span className="hidden sm:flex">Tindak Lanjuti</span>
                           <ArrowUpRight className="w-4 h-4" />
                         </Button>
                       </div>

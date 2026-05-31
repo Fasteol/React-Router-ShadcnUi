@@ -9,7 +9,7 @@ import {
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 
-// Import ikon tambahan untuk konten baru
+// Import ikon
 import {
   CheckCircle2,
   Code,
@@ -30,9 +30,10 @@ import {
   Banknote,
   Palette,
   Wallet,
-  UserCog,
   MapPin,
   Cpu,
+  History,
+  GitCommitHorizontal,
 } from "lucide-react";
 
 export default function AboutPage() {
@@ -46,9 +47,9 @@ export default function AboutPage() {
       <div className="flex flex-col items-center text-center space-y-4 mt-4">
         <Badge
           variant="secondary"
-          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm text-primary"
+          className="px-4 py-1.5 text-xs font-semibold dark:bg-muted/50 border shadow-sm text-primary"
         >
-          Versi 3.0.0 (Standarisasi UI & Optimasi Performa)
+          Versi 3.1.0 (Notifikasi Dinamis & Keamanan Akun)
         </Badge>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
           Tentang Sistem Invoice & Manajemen
@@ -59,91 +60,6 @@ export default function AboutPage() {
           transaksi, pelacakan biaya operasional, hingga analisis finansial
           secara komprehensif tanpa hambatan visual.
         </p>
-      </div>
-
-      {/* ==========================================
-          SECTION: PEMBARUAN TERBARU (CHANGELOG)
-      ========================================== */}
-      <div className="space-y-6">
-        <div className="text-center space-y-2 mb-2">
-          <h2 className="text-2xl font-bold tracking-tight">
-            Sorotan Pembaruan Terbaru
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Fungsionalitas dan peningkatan arsitektur berskala besar pada
-            sistem.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            {
-              icon: Zap,
-              title: "Optimasi Render (useMemo)",
-              desc: "Kalkulasi data dan sistem filter kini dibungkus dengan useMemo, mencegah re-render dan meningkatkan performa sistem secara drastis.",
-              color: "text-amber-500",
-              bg: "bg-amber-500/10",
-              borderColor: "border-amber-500/20",
-            },
-            {
-              icon: Palette,
-              title: "Standarisasi UI/UX",
-              desc: "Penyelarasan layout grid, proporsi input form (h-10), dan konsistensi tombol responsif di seluruh modul aplikasi.",
-              color: "text-indigo-500",
-              bg: "bg-indigo-500/10",
-              borderColor: "border-indigo-500/20",
-            },
-            {
-              icon: UserCog,
-              title: "Manajemen Hak Akses",
-              desc: "Kontrol keamanan ganda dengan pembagian Role (Admin, Finance, Viewer) yang terstruktur rapi.",
-              color: "text-blue-500",
-              bg: "bg-blue-500/10",
-              borderColor: "border-blue-500/20",
-            },
-            {
-              icon: Wallet,
-              title: "Expense Tracking",
-              desc: "Pelacakan biaya operasional terintegrasi untuk kalkulasi rasio margin dan profit bersih secara riil.",
-              color: "text-rose-500",
-              bg: "bg-rose-500/10",
-              borderColor: "border-rose-500/20",
-            },
-            {
-              icon: Banknote,
-              title: "Sistem Multi-Mata Uang",
-              desc: "Dukungan penuh konversi IDR ke USD secara real-time pada seluruh modul dengan input absolut yang bersih.",
-              color: "text-emerald-500",
-              bg: "bg-emerald-500/10",
-              borderColor: "border-emerald-500/20",
-            },
-            {
-              icon: DownloadCloud,
-              title: "Ekspor Laporan PDF & Excel",
-              desc: "Pembuatan otomatis laporan finansial berformat PDF resmi (dengan kop surat) & Spreadsheet.",
-              color: "text-violet-500",
-              bg: "bg-violet-500/10",
-              borderColor: "border-violet-500/20",
-            },
-          ].map((item, idx) => (
-            <div
-              key={idx}
-              className={`flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1 ${item.borderColor}`}
-            >
-              <div
-                className={`p-3 rounded-xl w-fit ${item.bg} ${item.color} mb-4`}
-              >
-                <item.icon className="w-5 h-5" />
-              </div>
-              <h3 className="font-bold text-foreground text-sm mb-1">
-                {item.title}
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {item.desc}
-              </p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* ==========================================
@@ -221,13 +137,17 @@ export default function AboutPage() {
           ].map((item, idx) => (
             <div
               key={idx}
-              className="flex flex-col items-center p-4 border rounded-2xl bg-card text-center hover:border-primary/50 transition-colors shadow-sm hover:shadow-md"
+              className="flex flex-col items-center p-5 border rounded-2xl bg-card text-center hover:border-primary/50 transition-colors shadow-sm hover:shadow-md"
             >
-              <div className={`p-3 rounded-full ${item.bg} ${item.color} mb-3`}>
+              <div
+                className={`p-3.5 rounded-full ${item.bg} ${item.color} mb-3`}
+              >
                 <item.icon className="w-6 h-6" />
               </div>
               <h3 className="font-semibold text-sm">{item.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {item.desc}
+              </p>
             </div>
           ))}
         </div>
@@ -246,7 +166,8 @@ export default function AboutPage() {
               <CardTitle>Fitur & Kapabilitas Inti</CardTitle>
             </div>
             <CardDescription>
-              Mekanisme yang dirancang untuk mempercepat alur kerja harian.
+              Mekanisme cerdas yang dirancang untuk mempercepat alur kerja
+              harian.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 text-sm flex-1">
@@ -254,33 +175,33 @@ export default function AboutPage() {
               <CreditCard className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Sistem Invoice & Relasi Data Cerdas:
+                  Sistem Invoice Relasional:
                 </strong>{" "}
-                Pembuatan tagihan super cepat dengan fitur penarikan data klien
-                dan penyisipan layanan dari katalog yang saling terintegrasi
-                dalam satu form.
+                Pembuatan tagihan super cepat dengan fitur penarikan otomatis
+                data klien dan penyisipan layanan dari katalog ke dalam satu
+                form yang terintegrasi.
               </p>
             </div>
             <div className="flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Keamanan & Otorisasi Ketat:
+                  Keamanan & Otorisasi Transparan:
                 </strong>{" "}
-                Sistem login terlindungi serta manajemen peran berbasis{" "}
-                <i>tier</i> yang memastikan histori pengaturan dan akses data
-                sensitif terkontrol dengan baik.
+                Sistem <i>login</i> terlindungi, panel pembaruan sandi dinamis,
+                serta manajemen peran berbasis <i>tier</i> untuk memastikan
+                histori pengaturan terkontrol dengan aman.
               </p>
             </div>
             <div className="flex items-start gap-3">
               <Globe className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Skala Finansial Global:
+                  Skala Finansial Adaptif:
                 </strong>{" "}
-                Pilihan mata uang ganda yang menyesuaikan rasio nilai tukar
-                secara otomatis, dipadukan dengan kalkulasi pengeluaran
-                (Expense) untuk menghitung profit aktual.
+                Pilihan mata uang ganda yang menyesuaikan rasio secara dinamis,
+                dipadukan dengan modul pengeluaran (Expense) untuk pelaporan
+                profit bersih yang sangat presisi.
               </p>
             </div>
           </CardContent>
@@ -326,15 +247,149 @@ export default function AboutPage() {
                 <Palette className="w-4 h-4" /> Tema Dinamis & UX
               </strong>
               Didukung integrasi <strong>Dark Mode / Light Mode</strong> yang
-              terikat dengan preferensi browser. Desain antarmuka difokuskan
-              pada keterbacaan data grid, presisi komponen form, penggunaan{" "}
+              terikat dengan sistem. Desain antarmuka difokuskan pada
+              keterbacaan data grid, presisi proporsi komponen form, pemanfaatan{" "}
               <em>whitespace</em> yang lega, serta meminimalisir input manual
-              demi akurasi pengolahan angka.
+              demi mencegah <em>human error</em>.
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 3: Roadmap Masa Depan */}
+        {/* ==========================================
+            SECTION: HISTORI UPDATE (CHANGELOG)
+        ========================================== */}
+        <Card className="shadow-sm flex flex-col md:col-span-2 rounded-2xl">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <History className="w-5 h-5 text-primary" />
+              <CardTitle>Riwayat Versi & Pembaruan (Changelog)</CardTitle>
+            </div>
+            <CardDescription>
+              Jejak evolusi dan peningkatan fungsionalitas sistem.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative border-l-2 border-muted ml-3 space-y-8 pb-4">
+              {/* V 3.1.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center ring-4 ring-background">
+                  <GitCommitHorizontal className="w-3 h-3 text-primary-foreground" />
+                </span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                  <h3 className="font-bold text-foreground text-base">
+                    Versi 3.1.0
+                  </h3>
+                  <Badge className="w-fit bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-0 shadow-none font-semibold">
+                    Rilis Terbaru (Current)
+                  </Badge>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    <strong className="text-foreground">
+                      Notifikasi Dinamis:
+                    </strong>{" "}
+                    Pelacakan otomatis untuk Invoice Jatuh Tempo dan Pengeluaran
+                    Pending via <i>Offcanvas Panel</i>.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Keamanan Kredensial:
+                    </strong>{" "}
+                    Sistem pembaruan kata sandi aktif yang tersinkronisasi
+                    langsung dengan database virtual.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">
+                      Kelengkapan Bisnis:
+                    </strong>{" "}
+                    Penambahan field NPWP dan Website pada pengaturan identitas
+                    entitas perusahaan.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 3.0.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 3.0.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Pembaruan Arsitektur
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    Implementasi <code>useMemo</code> secara menyeluruh untuk
+                    optimasi performa *render*.
+                  </li>
+                  <li>
+                    Peluncuran modul pencatatan Pengeluaran (Expense Tracking).
+                  </li>
+                  <li>
+                    Standarisasi antarmuka form, grid, dan <i>whitespace</i>.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 2.0.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 2.0.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Fitur Fungsional
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    Ekspor otomatis laporan finansial berformat PDF dan Excel.
+                  </li>
+                  <li>
+                    Pembuatan modul Pengaturan (Settings) untuk identitas &
+                    preferensi.
+                  </li>
+                  <li>
+                    Dukungan Multi-Mata Uang (IDR & USD) secara *real-time*.
+                  </li>
+                </ul>
+              </div>
+
+              {/* V 1.0.0 */}
+              <div className="relative pl-8">
+                <span className="absolute -left-2.5 top-1 h-5 w-5 rounded-full bg-muted flex items-center justify-center ring-4 ring-background border border-border">
+                  <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
+                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-foreground text-base">
+                    Versi 1.0.0
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Rilis Perdana
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside marker:text-muted-foreground/50">
+                  <li>
+                    Peluncuran struktur antarmuka dasar dan navigasi sistem.
+                  </li>
+                  <li>
+                    Operasional CRUD untuk modul Transaksi, Klien, dan Layanan.
+                  </li>
+                  <li>Pengenalan UI Dashboard dan analitik finansial awal.</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Roadmap Masa Depan */}
         <Card className="shadow-sm flex flex-col md:col-span-2 rounded-2xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-1">
@@ -419,8 +474,8 @@ export default function AboutPage() {
           </CardContent>
         </Card>
 
-        {/* Card 4: Profil Pengembang */}
-        <Card className="shadow-sm md:col-span-2 rounded-2xl bg-gradient-to-br from-card to-muted/30 border-muted">
+        {/* Card 5: Profil Pengembang */}
+        <Card className="shadow-sm md:col-span-2 rounded-2xl bg-gradient-to-br from-card to-muted/30 border-muted mt-2">
           <CardContent className="pt-8 pb-8">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8">
               <div className="w-24 h-24 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center text-4xl font-extrabold shrink-0 shadow-lg rotate-3 hover:rotate-0 transition-transform">
@@ -451,12 +506,13 @@ export default function AboutPage() {
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed max-w-3xl mt-2">
                   Dikembangkan sebagai bentuk dedikasi dan eksplorasi mendalam
-                  terhadap ekosistem pemrograman web modern. Mengusung estetika{" "}
-                  <b>modern minimalis</b> dengan tampilan <i>clean look</i> yang
-                  terstruktur rapi, proyek ini difokuskan pada arsitektur
-                  komponen yang <i>reusable</i>, manajemen <b>state</b> yang
-                  sangat efisien, serta menghadirkan pengalaman pengguna (UX)
-                  yang setara dengan instrumen aplikasi skala <b>enterprise</b>.
+                  terhadap ekosistem pemrograman web modern. Secara ketat
+                  mengusung estetika <b>modern minimalis</b> dengan tampilan{" "}
+                  <i>clean look</i> yang menolak <i>clutter</i> visual. Proyek
+                  ini difokuskan pada arsitektur komponen yang <i>reusable</i>,
+                  manajemen state yang terukur, serta menghadirkan pengalaman
+                  pengguna (UX) yang rapi, profesional, dan setara dengan
+                  instrumen aplikasi skala enterprise.
                 </p>
               </div>
             </div>
