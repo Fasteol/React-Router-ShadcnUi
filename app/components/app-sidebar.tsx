@@ -51,7 +51,14 @@ export function AppSidebar() {
                     isActive={location.pathname === item.path}
                     onClick={() => isMobile && setOpenMobile(false)}
                   >
-                    <Link to={item.path}>
+                    <Link
+                      to={item.path}
+                      onClick={() => {
+                        if (isMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
+                    >
                       <item.icon />
                       <span>{item.name}</span>
                     </Link>
