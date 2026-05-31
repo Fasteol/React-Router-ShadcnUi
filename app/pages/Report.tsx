@@ -14,10 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
 import { toast } from "sonner";
-import { dataAwal } from "~/data/invoices"; // Mengambil data invoice yang sudah kita buat
+import { dataAwal } from "~/data/invoices";
 
 // ==========================================
 // UTILITY: Parsing & Formatting Mata Uang
@@ -45,34 +54,55 @@ export default function ReportsPage() {
     let countBelumBayar = 0;
     let countGagal = 0;
 
+    const pendapatanKlien: Record<string, number> = {};
+    const popularitasMetode: Record<string, number> = {};
+    const klienUnik = new Set<string>();
+
     dataAwal.forEach((inv) => {
       const nominal = parseRupiah(inv.totalAmount);
+      klienUnik.add(inv.clientName);
 
       switch (inv.paymentStatus) {
         case "Lunas":
           totalPendapatan += nominal;
           countLunas++;
+          pendapatanKlien[inv.clientName] =
+            (pendapatanKlien[inv.clientName] || 0) + nominal;
           break;
         case "Pending":
           totalTertunda += nominal;
           countPending++;
           break;
         case "Belum Bayar":
-          totalTertunda += nominal; // Kita anggap Belum Bayar sebagai potensi tertunda
+          totalTertunda += nominal;
           countBelumBayar++;
           break;
         case "Gagal":
           countGagal++;
           break;
       }
+
+      popularitasMetode[inv.paymentMethod] =
+        (popularitasMetode[inv.paymentMethod] || 0) + 1;
     });
 
     const totalInvoices = dataAwal.length;
+
+    const topKlien = Object.entries(pendapatanKlien)
+      .map(([nama, total]) => ({ nama, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    // Menampilkan semua metode tanpa dibatasi (akan diatur via Grid UI)
+    const topMetode = Object.entries(popularitasMetode)
+      .map(([metode, count]) => ({ metode, count }))
+      .sort((a, b) => b.count - a.count);
 
     return {
       totalPendapatan,
       totalTertunda,
       totalInvoices,
+      totalKlienAktif: klienUnik.size,
       distribusi: {
         lunas: (countLunas / totalInvoices) * 100,
         pending: (countPending / totalInvoices) * 100,
@@ -85,203 +115,234 @@ export default function ReportsPage() {
         belumBayar: countBelumBayar,
         gagal: countGagal,
       },
+      topKlien,
+      topMetode,
     };
   }, []);
 
-  // ==========================================
-  // HANDLER EXPORT
-  // ==========================================
   const handleExport = () => {
     toast.success(`Laporan (${formatExport.toUpperCase()}) sedang diunduh...`);
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-10 pb-16">
+    <div className="mx-auto max-w-6xl space-y-10 pb-16">
       {/* HEADER */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Laporan Finansial</h1>
         <p className="text-muted-foreground">
-          Tinjau ringkasan pendapatan, analisis status tagihan, dan ekspor data
+          Tinjau ringkasan pendapatan, analisis klien teratas, dan ekspor data
           operasional.
         </p>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* ==========================================
             SECTION 1: IKHTISAR KEUANGAN
         ========================================== */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">
-            Ikhtisar Pendapatan
-          </h2>
+        <section>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
+            <Card className="rounded-lg shadow-sm border-border">
+              <CardContent className="p-6">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Pendapatan (Lunas)
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                  {formatRupiah(stats.totalPendapatan)}
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card className="rounded-lg shadow-sm border-border">
+            <Card className="rounded-lg shadow-sm border-border">
+              <CardContent className="p-6">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Potensi & Tertunda
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
+                  {formatRupiah(stats.totalTertunda)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg shadow-sm border-border">
+              <CardContent className="p-6">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Invoice
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight">
+                  {stats.totalInvoices}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    Dokumen
+                  </span>
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg shadow-sm border-border">
+              <CardContent className="p-6">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Klien Aktif
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight">
+                  {stats.totalKlienAktif}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    Entitas
+                  </span>
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* ==========================================
+            SECTION 2: BENTO GRID (LAYOUT BARU)
+        ========================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* --- BARIS 1, KOLOM KIRI-TENGAH (SPAN 2) --- */}
+          <Card className="lg:col-span-2 flex flex-col h-full rounded-lg shadow-sm border-border">
             <CardHeader>
-              <CardTitle className="text-base">Performa Keseluruhan</CardTitle>
+              <CardTitle className="text-base">
+                Klien Teratas Berdasarkan Pendapatan
+              </CardTitle>
               <CardDescription>
-                Kalkulasi otomatis berdasarkan seluruh data tagihan yang
-                tercatat di sistem.
+                Lima penyumbang pendapatan terbesar (status lunas).
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                {/* Metrik 1 */}
-                <div className="space-y-2 rounded-lg border p-4 shadow-sm">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Total Pendapatan (Lunas)
-                  </p>
-                  <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                    {formatRupiah(stats.totalPendapatan)}
-                  </p>
-                </div>
-
-                {/* Metrik 2 */}
-                <div className="space-y-2 rounded-lg border p-4 shadow-sm">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Potensi & Tertunda
-                  </p>
-                  <p className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-                    {formatRupiah(stats.totalTertunda)}
-                  </p>
-                </div>
-
-                {/* Metrik 3 */}
-                <div className="space-y-2 rounded-lg border p-4 shadow-sm">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Total Dokumen Tagihan
-                  </p>
-                  <p className="text-2xl font-bold tracking-tight">
-                    {stats.totalInvoices}{" "}
-                    <span className="text-base font-normal text-muted-foreground">
-                      Invoice
-                    </span>
-                  </p>
-                </div>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama Klien</TableHead>
+                    <TableHead className="text-right">
+                      Total Pendapatan
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.topKlien.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={2}
+                        className="text-center text-muted-foreground py-6"
+                      >
+                        Belum ada data pendapatan lunas.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    stats.topKlien.map((klien, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {klien.nama}
+                        </TableCell>
+                        <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {formatRupiah(klien.total)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-        </section>
 
-        {/* ==========================================
-            SECTION 2: ANALISIS STATUS
-        ========================================== */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">
-            Analisis Tagihan
-          </h2>
-
-          <Card className="rounded-lg shadow-sm border-border">
+          {/* --- BARIS 1, KOLOM KANAN (SPAN 1) --- */}
+          <Card className="lg:col-span-1 flex flex-col h-full rounded-lg shadow-sm border-border">
             <CardHeader>
-              <CardTitle className="text-base">
-                Distribusi Status Pembayaran
-              </CardTitle>
+              <CardTitle className="text-base">Distribusi Status</CardTitle>
               <CardDescription>
-                Persentase keberhasilan dan status dari {stats.totalInvoices}{" "}
-                invoice yang diterbitkan.
+                Persentase {stats.totalInvoices} invoice.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Item: Lunas */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">
-                    Lunas ({stats.counts.lunas})
-                  </span>
-                  <span className="text-muted-foreground">
-                    {stats.distribusi.lunas.toFixed(1)}%
-                  </span>
+              {[
+                {
+                  label: "Lunas",
+                  count: stats.counts.lunas,
+                  pct: stats.distribusi.lunas,
+                  color: "bg-emerald-500",
+                },
+                {
+                  label: "Pending",
+                  count: stats.counts.pending,
+                  pct: stats.distribusi.pending,
+                  color: "bg-amber-500",
+                },
+                {
+                  label: "Belum Bayar",
+                  count: stats.counts.belumBayar,
+                  pct: stats.distribusi.belumBayar,
+                  color: "bg-blue-500",
+                },
+                {
+                  label: "Gagal",
+                  count: stats.counts.gagal,
+                  pct: stats.distribusi.gagal,
+                  color: "bg-red-500",
+                },
+              ].map((item) => (
+                <div key={item.label} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">
+                      {item.label} ({item.count})
+                    </span>
+                    <span className="text-muted-foreground">
+                      {item.pct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full ${item.color}`}
+                      style={{ width: `${item.pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-emerald-500"
-                    style={{ width: `${stats.distribusi.lunas}%` }}
-                  />
-                </div>
-              </div>
+              ))}
+            </CardContent>
+          </Card>
 
-              {/* Item: Pending */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">
-                    Pending ({stats.counts.pending})
-                  </span>
-                  <span className="text-muted-foreground">
-                    {stats.distribusi.pending.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          {/* --- BARIS 2, KOLOM KIRI-TENGAH (SPAN 2) --- */}
+          <Card className="lg:col-span-2 flex flex-col h-full rounded-lg shadow-sm border-border">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Preferensi Metode Pembayaran
+              </CardTitle>
+              <CardDescription>
+                Metode transaksi yang digunakan oleh klien.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Item metode dipecah jadi 2 kolom agar tidak kepanjangan ke bawah */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {stats.topMetode.map((item, index) => (
                   <div
-                    className="h-full bg-amber-500"
-                    style={{ width: `${stats.distribusi.pending}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Item: Belum Bayar */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">
-                    Belum Bayar ({stats.counts.belumBayar})
-                  </span>
-                  <span className="text-muted-foreground">
-                    {stats.distribusi.belumBayar.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-blue-500"
-                    style={{ width: `${stats.distribusi.belumBayar}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Item: Gagal */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">
-                    Gagal ({stats.counts.gagal})
-                  </span>
-                  <span className="text-muted-foreground">
-                    {stats.distribusi.gagal.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-red-500"
-                    style={{ width: `${stats.distribusi.gagal}%` }}
-                  />
-                </div>
+                    key={item.metode}
+                    className="flex items-center justify-between p-3 border rounded-md bg-card"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span className="font-medium">{item.metode}</span>
+                    </div>
+                    <Badge variant="secondary" className="font-normal">
+                      {item.count} Transaksi
+                    </Badge>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        </section>
 
-        {/* ==========================================
-            SECTION 3: EKSPOR DATA
-        ========================================== */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">
-            Manajemen Laporan
-          </h2>
-
-          <Card className="rounded-lg shadow-sm border-border">
+          {/* --- BARIS 2, KOLOM KANAN (SPAN 1) --- */}
+          <Card className="lg:col-span-1 flex flex-col h-full rounded-lg shadow-sm border-border">
             <CardHeader>
-              <CardTitle className="text-base">Ekspor Data Invoice</CardTitle>
-              <CardDescription>
-                Unduh rekapitulasi data tagihan Anda untuk keperluan audit atau
-                pembukuan eksternal.
-              </CardDescription>
+              <CardTitle className="text-base">Ekspor Data</CardTitle>
+              <CardDescription>Unduh rekapitulasi audit.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6 max-w-2xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <Label>Periode Data</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Cakupan waktu laporan yang ingin diunduh.
-                  </p>
-                </div>
+            <CardContent className="flex-1 space-y-6">
+              <div className="space-y-2">
+                <Label>Periode Data</Label>
                 <Select value={periodeExport} onValueChange={setPeriodeExport}>
-                  <SelectTrigger className="w-full sm:w-[250px] rounded-md">
+                  <SelectTrigger className="w-full rounded-md">
                     <SelectValue placeholder="Pilih Periode" />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,17 +358,10 @@ export default function ReportsPage() {
                 </Select>
               </div>
 
-              <div className="shrink-0 bg-border h-[1px] w-full" />
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <Label>Format File</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Pilih ekstensi file sesuai kebutuhan sistem Anda.
-                  </p>
-                </div>
+              <div className="space-y-2">
+                <Label>Format File</Label>
                 <Select value={formatExport} onValueChange={setFormatExport}>
-                  <SelectTrigger className="w-full sm:w-[250px] rounded-md">
+                  <SelectTrigger className="w-full rounded-md">
                     <SelectValue placeholder="Pilih Format" />
                   </SelectTrigger>
                   <SelectContent>
@@ -318,20 +372,18 @@ export default function ReportsPage() {
                 </Select>
               </div>
             </CardContent>
-            <CardFooter className="border-t bg-muted/40 px-6 py-4 flex items-center justify-between rounded-b-lg">
-              <p className="text-sm text-muted-foreground hidden sm:block">
-                Sistem akan memproses dokumen secara otomatis.
-              </p>
+
+            {/* mt-auto memastikan letak tombol konsisten di bawah */}
+            <CardFooter className="mt-auto border-t bg-muted/40 px-6 py-4">
               <Button
                 onClick={handleExport}
-                size="sm"
-                className="rounded-md w-full sm:w-auto cursor-pointer"
+                className="w-full cursor-pointer rounded-md"
               >
-                Unduh Laporan
+                Proses & Unduh
               </Button>
             </CardFooter>
           </Card>
-        </section>
+        </div>
       </div>
     </div>
   );

@@ -66,7 +66,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2 max-w-xl">
+              <div className="space-y-2">
                 <Label htmlFor="nama">Nama Lengkap</Label>
                 <Input
                   id="nama"
@@ -77,7 +77,7 @@ export default function SettingsPage() {
                   className="rounded-md"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -133,7 +133,7 @@ export default function SettingsPage() {
                 Nama dan alamat yang akan tercetak otomatis pada setiap invoice.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 max-w-2xl">
+            <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="namaPerusahaan">Nama Perusahaan / Bisnis</Label>
                 <Input
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                 Tujuan transfer pembayaran yang ditujukan untuk klien Anda.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 max-w-2xl">
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="namaBank">Nama Bank</Label>
@@ -246,7 +246,7 @@ export default function SettingsPage() {
                 Sesuaikan tampilan sistem dan standar mata uang Anda.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6 max-w-2xl">
+            <CardContent className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <Label>Tema Aplikasi</Label>

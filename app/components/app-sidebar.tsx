@@ -1,74 +1,74 @@
+"use client";
+
+import * as React from "react";
 import {
   LayoutDashboard,
   ReceiptText,
   User,
+  Package,
   BarChart3,
   Info,
   Settings,
+  GalleryVerticalEnd,
+  AudioWaveform,
+  Command,
 } from "lucide-react";
+
+import { NavMain } from "~/components/nav-main";
+import { NavProjects } from "~/components/nav-projects";
+import { NavUser } from "~/components/nav-user";
+import { TeamSwitcher } from "~/components/team.switcher";
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarRail,
 } from "~/components/ui/sidebar";
-import { Link, useLocation } from "react-router";
-import { useEffect } from "react";
 
-export function AppSidebar() {
-  const { isMobile, setOpenMobile } = useSidebar();
-  const location = useLocation();
+// Data Kustom untuk Billify
+const data = {
+  user: {
+    name: "Razan Sya'bani",
+    email: "razan@fauzansyabani.dev",
+    avatar: "/avatars/razan.jpg",
+  },
+  teams: [
+    { name: "Billify", logo: GalleryVerticalEnd, plan: "" },
+    { name: "Personal Proj", logo: AudioWaveform, plan: "Free" },
+  ],
+  navMain: [
+    { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    { title: "Transaction", url: "/transaction", icon: ReceiptText },
+    { title: "Client", url: "/client", icon: User },
+    { title: "Services", url: "/service", icon: Package },
+    { title: "Reports", url: "/report", icon: BarChart3 },
+  ],
+  projects: [
+    { name: "About", url: "/about", icon: Info },
+    { name: "Settings", url: "/setting", icon: Settings },
+  ],
+};
 
-  const navItems = [
-    { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    { name: "Transaction", path: "/transaction", icon: ReceiptText },
-    { name: "Client", path: "/client", icon: User },
-    { name: "Reports", path: "/report", icon: BarChart3 },
-    { name: "About", path: "/about", icon: Info },
-    { name: "Settings", path: "/setting", icon: Settings },
-  ];
-
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar collapsible="offcanvas">
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        <TeamSwitcher teams={data.teams} />
+      </SidebarHeader>
+
       <SidebarContent>
-        <div className="p-6 flex items-center gap-2 border-b">
-          <div className="bg-primary text-primary-foreground p-1.5 rounded-md font-bold text-xs">
-            BLY
-          </div>
-          <span className="font-bold text-lg">Billify</span>
-        </div>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.path}
-                    onClick={() => isMobile && setOpenMobile(false)}
-                  >
-                    <Link
-                      to={item.path}
-                      onClick={() => {
-                        if (isMobile) {
-                          setOpenMobile(false);
-                        }
-                      }}
-                    >
-                      <item.icon />
-                      <span>{item.name}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* NavMain di sini akan merender daftar menu utama */}
+        <NavMain items={data.navMain} />
+
+        {/* NavProjects bisa kita gunakan untuk menu Sistem/Tambahan */}
+        <NavProjects projects={data.projects} />
       </SidebarContent>
+
+      <SidebarFooter>
+        <NavUser user={data.user} />
+      </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

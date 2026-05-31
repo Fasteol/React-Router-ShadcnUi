@@ -8,6 +8,7 @@ export type Invoice = {
   paymentMethod: string;
   date: string;
   dueDate: string;
+  services: Service[]; // properti baru untuk menyimpan detail layanan transaksi
 };
 
 // ==========================================
@@ -33,6 +34,13 @@ export type AdminSettings = {
     mataUang: string;
     notifikasiEmail: boolean;
   };
+};
+
+export type Service = {
+  id: string;
+  nama: string;
+  deskripsi: string;
+  harga: number; // Simpan sebagai number untuk kemudahan kalkulasi
 };
 
 export const defaultAdminSettings: AdminSettings = {
@@ -71,7 +79,7 @@ const pilihanMetode = [
   "QRIS",
 ];
 
-const daftarKlien = [
+export const daftarKlien = [
   { name: "Studio Ghibli Inc.", email: "finance@ghibli.jp" },
   { name: "Tokopedia", email: "billing@tokopedia.com" },
   { name: "PT. Mencari Cinta Sejati", email: "halo@mencaricinta.id" },
@@ -79,6 +87,33 @@ const daftarKlien = [
   { name: "Reyna Juwita Design", email: "reyna@juwita.co" },
   { name: "Bandung Creative Studio", email: "contact@bdgcreative.com" },
   { name: "Anomali Coffee Roasters", email: "invoice@anomalicoffee.id" },
+];
+
+export const dataLayanan: Service[] = [
+  {
+    id: "S001",
+    nama: "Web Development",
+    deskripsi: "Pembuatan website company profile",
+    harga: 5000000,
+  },
+  {
+    id: "S002",
+    nama: "UI/UX Design",
+    deskripsi: "Desain antarmuka aplikasi mobile",
+    harga: 3000000,
+  },
+  {
+    id: "S003",
+    nama: "Maintenance",
+    deskripsi: "Pemeliharaan server bulanan",
+    harga: 500000,
+  },
+  {
+    id: "S004",
+    nama: "Graphic Design",
+    deskripsi: "Pembuatan aset visual promosi",
+    harga: 1500000,
+  },
 ];
 
 function generateRandomDate(startMonth: number, endMonth: number) {
@@ -99,7 +134,22 @@ export const dataAwal: Invoice[] = Array.from({ length: 100 }).map(
     const klienAcak =
       daftarKlien[Math.floor(Math.random() * daftarKlien.length)];
 
-    const nominalAngka = Math.floor(Math.random() * 100 + 1) * 50000;
+    // Mengambil 1 hingga 3 layanan acak secara unik untuk setiap invoice
+    const jumlahLayanan = Math.floor(Math.random() * 3) + 1;
+    const layananTerpilih: Service[] = [];
+    const salinanLayanan = [...dataLayanan].sort(() => 0.5 - Math.random());
+
+    for (let i = 0; i < jumlahLayanan; i++) {
+      if (salinanLayanan[i]) {
+        layananTerpilih.push(salinanLayanan[i]);
+      }
+    }
+
+    // Kalkulasi nominal string otomatis berdasarkan total harga layanan terpilih
+    const nominalAngka = layananTerpilih.reduce(
+      (acc, curr) => acc + curr.harga,
+      0,
+    );
     const nominalString = "Rp " + nominalAngka.toLocaleString("id-ID");
 
     const tglDibuat = generateRandomDate(1, 5);
@@ -117,6 +167,7 @@ export const dataAwal: Invoice[] = Array.from({ length: 100 }).map(
       paymentMethod: metodeAcak,
       date: tglDibuat,
       dueDate: tglJatuhTempo,
+      services: layananTerpilih,
     };
   },
 );
