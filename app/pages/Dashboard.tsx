@@ -1,8 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { toast } from "sonner";
 
+// ==========================================
+// SHADCN UI COMPONENTS
+// ==========================================
 import {
   Card,
   CardContent,
@@ -13,20 +17,44 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Calendar } from "~/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import { Label } from "~/components/ui/label";
+import { Checkbox } from "~/components/ui/checkbox";
+
+// ==========================================
+// ICONS
+// ==========================================
 import {
   Activity,
-  CreditCard,
   DollarSign,
   TrendingUp,
   ArrowUpRight,
   Download,
-  Plus,
-  Users,
-  Settings,
   Clock,
   Briefcase,
   PieChart as PieIcon,
   CheckCircle2,
+  Calendar as CalendarIcon,
+  FileSpreadsheet,
+  Mail,
+  FileText,
+  LayoutDashboard,
+  SlidersHorizontal,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -48,9 +76,10 @@ import {
   ChartTooltipContent,
 } from "~/components/ui/chart";
 
-// ==========================================
+import * as XLSX from "xlsx";
+import type { DateRange } from "react-day-picker";
+
 // IMPORT DATA
-// ==========================================
 import { dataAwal, type Invoice } from "~/data/invoices";
 
 const chartConfig = {
@@ -60,7 +89,6 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-// Warna untuk Donut Chart: Lunas (Emerald), Pending (Amber), Belum Bayar (Sky), Gagal (Rose)
 const STATUS_COLORS: Record<string, string> = {
   Lunas: "#10b981",
   Pending: "#f59e0b",
@@ -68,30 +96,83 @@ const STATUS_COLORS: Record<string, string> = {
   Gagal: "#e11d48",
 };
 
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
-const parseRupiahToNumber = (rupiahString: string) => {
-  return parseInt(rupiahString.replace(/[^0-9]/g, ""), 10) || 0;
+const EXCHANGE_RATE_USD = 16000;
+
+const parseCurrencyToNumber = (currencyString: string) => {
+  return parseInt(currencyString.replace(/[^0-9]/g, ""), 10) || 0;
 };
 
-const formatRupiah = (angka: number) => {
-  return new Intl.NumberFormat("id-ID", {
+const formatCurrency = (angka: number, currencyCode: string) => {
+  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
+    currency: currencyCode,
+    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
+    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
   }).format(angka);
-};
-
-const formatYAxis = (tickItem: number) => {
-  if (tickItem >= 1000000000) return (tickItem / 1000000000).toFixed(1) + " M";
-  if (tickItem >= 1000000) return (tickItem / 1000000).toFixed(0) + " Jt";
-  if (tickItem >= 1000) return (tickItem / 1000).toFixed(0) + " Rb";
-  return tickItem.toString();
 };
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+
+  // State Preferensi Mata Uang & Info
+  const [mataUang, setMataUang] = useState("IDR");
+  const [headerUser, setHeaderUser] = useState({ name: "Admin" });
+  const [infoBisnis, setInfoBisnis] = useState({
+    nama: "Internal Sistem",
+    alamat: "Semua Wilayah",
+  });
+
+  // State Date Range Picker
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(2026, 0, 1),
+    to: new Date(2026, 4, 31),
+  });
+
+  // State UI Modal Export
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [fileFormat, setFileFormat] = useState("pdf");
+  const [includeSections, setIncludeSections] = useState({
+    metrics: true,
+    charts: true,
+    recentTransactions: true,
+  });
+
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("adminSettings");
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      if (parsed?.preferensi?.mataUang) {
+        setMataUang(parsed.preferensi.mataUang);
+      }
+      if (parsed?.perusahaan?.nama) {
+        setInfoBisnis({
+          nama: parsed.perusahaan.nama || "Perusahaan Anonim",
+          alamat: parsed.perusahaan.alamat || "Alamat belum diatur",
+        });
+      }
+    }
+
+    const storedUser = localStorage.getItem("currentUser");
+    if (storedUser) {
+      setHeaderUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+  const formatYAxis = (tickItem: number) => {
+    return new Intl.NumberFormat(mataUang === "USD" ? "en-US" : "id-ID", {
+      notation: "compact",
+      compactDisplay: "short",
+      maximumFractionDigits: 1,
+    }).format(tickItem);
+  };
+
+  const convertAndFormat = (idrString: string) => {
+    const rawIdr = parseCurrencyToNumber(idrString);
+    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+    return formatCurrency(finalValue, mataUang);
+  };
 
   const {
     totalPendapatan,
@@ -120,11 +201,26 @@ export default function DashboardPage() {
 
     const belumLunas: Invoice[] = [];
     const clientRevenue: Record<string, number> = {};
+    let totalDataTerfilter = 0;
 
     dataAwal.forEach((invoice) => {
-      const nominal = parseRupiahToNumber(invoice.totalAmount);
+      if (dateRange?.from) {
+        const invDate = new Date(invoice.date).getTime();
+        const start = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const end = new Date(dateRange.to || dateRange.from).setHours(
+          23,
+          59,
+          59,
+          999,
+        );
 
-      // Hitung pendapatan per klien
+        if (invDate < start || invDate > end) return;
+      }
+
+      totalDataTerfilter += 1;
+      const rawIdr = parseCurrencyToNumber(invoice.totalAmount);
+      const nominal = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+
       if (!clientRevenue[invoice.clientName]) {
         clientRevenue[invoice.clientName] = 0;
       }
@@ -150,9 +246,10 @@ export default function DashboardPage() {
     });
 
     const tingkatSukses =
-      dataAwal.length > 0 ? ((lunas / dataAwal.length) * 100).toFixed(1) : "0";
+      totalDataTerfilter > 0
+        ? ((lunas / totalDataTerfilter) * 100).toFixed(1)
+        : "0";
 
-    // Data untuk Donut Chart (filter agar yg bernilai 0 tidak muncul di chart)
     const statusChartData = [
       { name: "Lunas", value: lunas },
       { name: "Pending", value: pending },
@@ -160,13 +257,23 @@ export default function DashboardPage() {
       { name: "Gagal", value: gagal },
     ].filter((data) => data.value > 0);
 
-    // Hitung Top Klien
     const sortedClients = Object.entries(clientRevenue)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 4);
 
-    const terbaru = dataAwal.slice(0, 5);
+    const terbaru = dataAwal
+      .filter((inv) => {
+        if (!dateRange?.from) return true;
+        const d = new Date(inv.date).getTime();
+        return (
+          d >= new Date(dateRange.from).setHours(0, 0, 0, 0) &&
+          d <=
+            new Date(dateRange.to || dateRange.from).setHours(23, 59, 59, 999)
+        );
+      })
+      .slice(0, 5);
+
     const mendesak = belumLunas
       .sort(
         (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
@@ -184,13 +291,12 @@ export default function DashboardPage() {
       tagihanMendesak: mendesak,
       topClients: sortedClients,
     };
-  }, []);
+  }, [mataUang, dateRange]);
 
   const tanggalHariIni = format(new Date(), "EEEE, dd MMMM yyyy", {
     locale: id,
   });
 
-  // Fungsi Helper untuk warna Badge Status
   const getStatusBadgeStyle = (status: string) => {
     switch (status) {
       case "Lunas":
@@ -206,6 +312,251 @@ export default function DashboardPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    const dataTerfilter = dataAwal.filter((invoice) => {
+      if (!dateRange?.from) return true;
+      const invDate = new Date(invoice.date).getTime();
+      const start = new Date(dateRange.from).setHours(0, 0, 0, 0);
+      const end = new Date(dateRange.to || dateRange.from).setHours(
+        23,
+        59,
+        59,
+        999,
+      );
+      return invDate >= start && invDate <= end;
+    });
+
+    if (dataTerfilter.length === 0) {
+      toast.error(
+        "Tidak ada data transaksi pada rentang tanggal ini untuk diekspor!",
+      );
+      return;
+    }
+
+    const excelRows = dataTerfilter.map((inv, idx) => ({
+      No: idx + 1,
+      "No. Invoice": inv.invoice,
+      "Nama Klien": inv.clientName,
+      "Tanggal Pembuatan": inv.date,
+      "Tanggal Jatuh Tempo": inv.dueDate,
+      "Status Pembayaran": inv.paymentStatus,
+      "Total Nominal (IDR)": parseCurrencyToNumber(inv.totalAmount),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ringkasan Finansial");
+    worksheet["!cols"] = [
+      { wch: 6 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 22 },
+    ];
+    const fileDate = format(new Date(), "yyyyMMdd");
+    XLSX.writeFile(workbook, `Laporan_Dashboard_${fileDate}.xlsx`);
+    toast.success("Laporan Excel (.xlsx) berhasil diunduh!");
+  };
+
+  const handleExportDashboard = () => {
+    const printIframe = document.createElement("iframe");
+    printIframe.style.position = "fixed";
+    printIframe.style.right = "0";
+    printIframe.style.bottom = "0";
+    printIframe.style.width = "0";
+    printIframe.style.height = "0";
+    printIframe.style.border = "0";
+    document.body.appendChild(printIframe);
+
+    const printDocument = printIframe.contentWindow?.document;
+    if (!printDocument) return;
+
+    const topKlienHtml = topClients
+      .map(
+        (k, i) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">${i + 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: bold;">${k.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; color: #059669; font-weight: bold;">${formatCurrency(k.total, mataUang)}</td>
+      </tr>
+    `,
+      )
+      .join("");
+
+    const aktivitasHtml = aktivitasTerbaru
+      .map(
+        (inv) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-family: monospace;">${inv.invoice}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">${inv.clientName}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: center;">${inv.date}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: center;">
+          <span style="font-weight: bold; ${
+            inv.paymentStatus === "Lunas"
+              ? "color: #065f46;"
+              : inv.paymentStatus === "Pending"
+                ? "color: #92400e;"
+                : "color: #991b1b;"
+          }">${inv.paymentStatus}</span>
+        </td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormat(inv.totalAmount)}</td>
+      </tr>
+    `,
+      )
+      .join("");
+
+    const mendesakHtml =
+      tagihanMendesak.length > 0
+        ? tagihanMendesak
+            .map(
+              (inv) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-family: monospace;">${inv.invoice}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">${inv.clientName}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: center; color: #dc2626; font-weight: bold;">${inv.dueDate}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-align: right; font-weight: bold;">${convertAndFormat(inv.totalAmount)}</td>
+      </tr>
+    `,
+            )
+            .join("")
+        : '<tr><td colspan="4" style="padding: 15px; text-align: center; font-size: 11px; color: #6b7280;">Tidak ada tagihan mendesak.</td></tr>';
+
+    const content = `
+      <html>
+        <head>
+          <title>Snapshot Dashboard - ${infoBisnis.nama}</title>
+          <style>
+            @page { size: A4; margin: 20mm; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a202c; margin: 0; padding: 0; line-height: 1.5; }
+            .header-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; border-bottom: 3px double #cbd5e1; padding-bottom: 15px; }
+            .title-report { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; text-transform: uppercase; margin: 0; color: #111827; }
+            .meta-text { font-size: 11px; color: #4b5563; margin-top: 4px; }
+            .grid-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+            .card-metric { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background-color: #f9fafb; }
+            .metric-title { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+            .metric-value { font-size: 18px; font-weight: 800; color: #111827; }
+            .section-title { font-size: 13px; font-weight: 700; border-left: 3px solid #3b82f6; padding-left: 8px; margin-bottom: 12px; text-transform: uppercase; color: #1f2937; margin-top: 25px;}
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+            table.data-table th { background-color: #f3f4f6; padding: 8px; font-size: 10px; font-weight: 700; border-bottom: 2px solid #e5e7eb; color: #374151; text-transform: uppercase; text-align: left;}
+            .footer-signature { margin-top: 50px; display: flex; justify-content: space-between; font-size: 11px; }
+          </style>
+        </head>
+        <body>
+          <table class="header-table">
+            <tr>
+              <td>
+                <h1 class="title-report">Ringkasan Dashboard</h1>
+                <div class="meta-text">Dicetak Oleh: <b>${headerUser.name}</b></div>
+                <div class="meta-text">Waktu Cetak: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}</div>
+              </td>
+              <td style="text-align: right; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 14px; color: #3b82f6;">${infoBisnis.nama}</div>
+                <div style="font-size: 10px; color: #6b7280; max-width: 220px; margin-left: auto; line-height: 1.3;">${infoBisnis.alamat}</div>
+              </td>
+            </tr>
+          </table>
+          <div class="grid-metrics">
+            <div class="card-metric" style="border-top: 3px solid #3b82f6;">
+              <div class="metric-title">Total Pendapatan</div>
+              <div class="metric-value">${formatCurrency(totalPendapatan, mataUang)}</div>
+            </div>
+            <div class="card-metric" style="border-top: 3px solid #10b981;">
+              <div class="metric-title">Invoice Lunas</div>
+              <div class="metric-value">${totalLunas} <span style="font-size:12px; color:#6b7280; font-weight:normal;">Tagihan</span></div>
+            </div>
+            <div class="card-metric" style="border-top: 3px solid #f59e0b;">
+              <div class="metric-title">Menunggu Pembayaran</div>
+              <div class="metric-value">${totalMenunggu} <span style="font-size:12px; color:#6b7280; font-weight:normal;">Tagihan</span></div>
+            </div>
+            <div class="card-metric" style="border-top: 3px solid #6366f1;">
+              <div class="metric-title">Tingkat Kesuksesan</div>
+              <div class="metric-value">${tingkatKesuksesan}%</div>
+            </div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 48%; vertical-align: top; padding-right: 15px;">
+                <div class="section-title">Klien Teratas</div>
+                <table class="data-table">
+                  <thead><tr><th style="width:10%;">No</th><th>Nama Klien</th><th style="text-align: right;">Total Nilai</th></tr></thead>
+                  <tbody>${topKlienHtml || '<tr><td colspan="3" style="padding: 10px; text-align: center; font-size: 11px;">Belum ada data klien.</td></tr>'}</tbody>
+                </table>
+              </td>
+              <td style="width: 4%;">&nbsp;</td>
+              <td style="width: 48%; vertical-align: top;">
+                <div class="section-title" style="border-left-color: #ef4444;">Tagihan Mendesak (Jatuh Tempo)</div>
+                <table class="data-table">
+                  <thead><tr><th>Invoice</th><th>Klien</th><th style="text-align: center;">Tgl Tempo</th><th style="text-align: right;">Nominal</th></tr></thead>
+                  <tbody>${mendesakHtml}</tbody>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <div class="section-title">Aktivitas Transaksi Terbaru</div>
+          <table class="data-table">
+            <thead>
+              <tr><th style="width: 15%;">ID Invoice</th><th style="width: 35%;">Nama Klien</th><th style="width: 15%; text-align: center;">Tanggal</th><th style="width: 15%; text-align: center;">Status</th><th style="width: 20%; text-align: right;">Total Tagihan</th></tr>
+            </thead>
+            <tbody>${aktivitasHtml || '<tr><td colspan="5" style="padding: 15px; text-align: center; font-size: 11px;">Belum ada riwayat transaksi.</td></tr>'}</tbody>
+          </table>
+          <div class="footer-signature">
+            <div><p style="margin-bottom: 40px; color: #6b7280;">Dibuat Otomatis Oleh Sistem,</p><p style="font-weight: bold; border-top: 1px solid #9ca3af; padding-top: 4px; width: 160px;">Dashboard Reporting</p></div>
+            <div style="text-align: right;"><p style="margin-bottom: 40px; color: #6b7280;">Disetujui Oleh,</p><p style="font-weight: bold; border-top: 1px solid #9ca3af; padding-top: 4px; width: 160px; margin-left: auto;">${headerUser.name}</p></div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printDocument.open();
+    printDocument.write(content);
+    printDocument.close();
+
+    printIframe.onload = () => {
+      setTimeout(() => {
+        printIframe.contentWindow?.focus();
+        printIframe.contentWindow?.print();
+        document.body.removeChild(printIframe);
+        toast.success("Ringkasan Dashboard berhasil diproses ke PDF!");
+      }, 500);
+    };
+  };
+
+  const handleKirimEmailReminder = (item: Invoice) => {
+    const namaPerusahaan = infoBisnis.nama;
+    const nominalTerformat = convertAndFormat(item.totalAmount);
+    const subject = encodeURIComponent(
+      `[URGENT] Pengingat Batas Jatuh Tempo Pembayaran - ${item.invoice}`,
+    );
+    const body = encodeURIComponent(
+      `Halo ${item.clientName},\n\nKami dari ${namaPerusahaan} ingin menginformasikan mengenai tagihan penagihan dengan nomor Invoice ${item.invoice} sebesar ${nominalTerformat} yang jatuh tempo pada tanggal ${item.dueDate}.\n\nMohon untuk segera melakukan penyelesaian pembayaran sebelum atau tepat pada tanggal jatuh tempo tersebut.\n\nJika Anda telah melakukan pembayaran, mohon abaikan pesan pengingat ini otomatis.\n\nTerima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\n${namaPerusahaan}`,
+    );
+    const emailKlien =
+      "finance@" +
+      item.clientName.toLowerCase().replace(/[^a-z0-9]/g, "") +
+      ".com";
+    window.open(
+      `mailto:${emailKlien}?subject=${subject}&body=${body}`,
+      "_blank",
+    );
+    toast.success("Berhasil membuat draf pengingat di aplikasi email Anda!");
+  };
+
+  const handleProcessExport = () => {
+    setIsExporting(true);
+    setTimeout(() => {
+      setIsExporting(false);
+      setIsExportModalOpen(false);
+
+      if (fileFormat === "pdf") {
+        handleExportDashboard();
+      } else {
+        handleExportExcel();
+      }
+    }, 1500);
+  };
+
   return (
     <div className="flex flex-col gap-8 pb-10 animate-in fade-in duration-500 max-w-7xl mx-auto px-4 xl:px-0 mt-4">
       {/* === HEADER DASHBOARD === */}
@@ -215,25 +566,250 @@ export default function DashboardPage() {
             variant="secondary"
             className="mb-2 bg-primary/10 text-primary hover:bg-primary/20 border-none font-medium"
           >
-            <Clock className="w-3.5 h-3.5 mr-1.5" />
-            {tanggalHariIni}
+            <Clock className="w-3.5 h-3.5 mr-1.5" /> {tanggalHariIni}
           </Badge>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Kembali bekerja, Razan 👋
+            Kembali bekerja, {headerUser.name} 👋
           </h1>
           <p className="text-muted-foreground">
             Berikut adalah ringkasan performa finansial bisnis Anda hari ini.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button
-            variant="outline"
-            className="w-full sm:w-auto gap-2 rounded-lg"
-            onClick={() => alert("Mempersiapkan unduhan PDF...")}
-          >
-            <Download className="w-4 h-4" /> Export
-          </Button>
+        {/* CONTROLS BAR: FILTER & ACTIONS */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={`w-full sm:w-[260px] justify-start text-left font-normal rounded-lg shadow-sm ${!dateRange ? "text-muted-foreground" : ""}`}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "dd LLL yyyy", { locale: id })} -{" "}
+                      {format(dateRange.to, "dd LLL yyyy", { locale: id })}
+                    </>
+                  ) : (
+                    format(dateRange.from, "dd LLL yyyy", { locale: id })
+                  )
+                ) : (
+                  <span>Pilih rentang tanggal</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-lg" align="end">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={setDateRange}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* === MODAL EXPORT DASHBOARD === */}
+          <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto gap-2 font-semibold shadow-sm rounded-lg cursor-pointer bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all">
+                <Download className="w-4 h-4" /> Export
+              </Button>
+            </DialogTrigger>
+
+            {/* Menggunakan sistem layout referensi: p-0, overflow-hidden, border-0, shadow-xl */}
+            <DialogContent className="sm:max-w-[480px] sm:rounded-2xl p-0 overflow-hidden border-0 shadow-xl">
+              {/* Strip Gradien Atas Tetap Dipertahankan */}
+              <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500" />
+
+              {/* Pembungkus Utama (Sistem p-6 yang menyatukan Header, Body, dan Footer) */}
+              <div className="p-6">
+                <DialogHeader className="mb-5">
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <LayoutDashboard className="w-5 h-5 text-primary" /> Hub
+                    Ekspor Dashboard
+                  </DialogTitle>
+                  <DialogDescription className="text-sm">
+                    Kompilasi widget operasional dan metrik ringkasan menjadi
+                    dokumen siap cetak.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {/* Konten Utama Form / Pilihan Ekspor */}
+                <div className="grid gap-5 py-2">
+                  {/* FORMAT OUTPUT BERKAS */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Format Output Berkas
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div
+                        onClick={() => !isExporting && setFileFormat("pdf")}
+                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          fileFormat === "pdf"
+                            ? "border-blue-500 bg-blue-500/5 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                            : "border-border hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <FileText className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-bold">Executive PDF</span>
+                        <span className="text-[10px] opacity-80 text-center mt-0.5">
+                          Kop resmi & chart ringkas
+                        </span>
+                      </div>
+
+                      <div
+                        onClick={() => !isExporting && setFileFormat("excel")}
+                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          fileFormat === "excel"
+                            ? "border-emerald-500 bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "border-border hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-bold">
+                          Excel Worksheet
+                        </span>
+                        <span className="text-[10px] opacity-80 text-center mt-0.5">
+                          Data mentah tabular (.xlsx)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BATASAN CAKUPAN KOMPONEN */}
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5" /> Batasan
+                      Cakupan Komponen
+                    </Label>
+
+                    <div className="border rounded-xl p-3.5 bg-muted/20 space-y-3.5">
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label
+                            htmlFor="sec-metrics"
+                            className="text-sm font-semibold cursor-pointer"
+                          >
+                            Metrik Utama (Total & Piutang)
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Angka akumulasi performa pada widget atas
+                          </p>
+                        </div>
+                        <Checkbox
+                          id="sec-metrics"
+                          checked={includeSections.metrics}
+                          onCheckedChange={(checked) =>
+                            setIncludeSections((prev) => ({
+                              ...prev,
+                              metrics: !!checked,
+                            }))
+                          }
+                          disabled={isExporting}
+                        />
+                      </div>
+
+                      <div className="h-[1px] bg-border" />
+
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label
+                            htmlFor="sec-charts"
+                            className="text-sm font-semibold cursor-pointer"
+                          >
+                            Analisis Tren & Grafik
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Katalog layanan terlaris & metode terfavorit
+                          </p>
+                        </div>
+                        <Checkbox
+                          id="sec-charts"
+                          checked={includeSections.charts}
+                          onCheckedChange={(checked) =>
+                            setIncludeSections((prev) => ({
+                              ...prev,
+                              charts: !!checked,
+                            }))
+                          }
+                          disabled={isExporting || fileFormat === "excel"}
+                        />
+                      </div>
+
+                      <div className="h-[1px] bg-border" />
+
+                      <div className="flex items-center justify-between space-x-2">
+                        <div className="space-y-0.5">
+                          <Label
+                            htmlFor="sec-tx"
+                            className="text-sm font-semibold cursor-pointer"
+                          >
+                            Log Transaksi Terbaru
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Daftar baris tabel invoice terfilter
+                          </p>
+                        </div>
+                        <Checkbox
+                          id="sec-tx"
+                          checked={includeSections.recentTransactions}
+                          onCheckedChange={(checked) =>
+                            setIncludeSections((prev) => ({
+                              ...prev,
+                              recentTransactions: !!checked,
+                            }))
+                          }
+                          disabled={isExporting}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* DIALOG FOOTER (Mengikuti Pola mt-6 border-t pt-4 dari referensi Anda) */}
+                <DialogFooter className="mt-6 border-t pt-4 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3 sm:space-x-0">
+                  <p className="text-[11px] text-muted-foreground hidden sm:block flex-1 pr-4">
+                    * Pemrosesan disesuaikan dengan rentang tanggal.
+                  </p>
+
+                  <div className="flex flex-col-reverse sm:flex-row w-full sm:w-auto gap-2 shrink-0">
+                    <Button
+                      variant="ghost" /* Mengikuti style tombol "Batalkan" di referensi Anda */
+                      onClick={() => setIsExportModalOpen(false)}
+                      disabled={isExporting}
+                      className="rounded-xl font-semibold h-10 w-full sm:w-auto"
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      onClick={handleProcessExport}
+                      disabled={isExporting}
+                      className={`rounded-xl font-bold h-10 w-full sm:w-auto gap-2 shadow-md ${
+                        fileFormat === "pdf"
+                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      }`}
+                    >
+                      {isExporting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                          Mengekstrak...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> Unduh Dokumen
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </DialogFooter>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Button
             onClick={() => navigate("/transaction")}
             className="w-full sm:w-auto gap-2 rounded-lg shadow-md"
@@ -244,7 +820,7 @@ export default function DashboardPage() {
       </div>
 
       {/* === METRIK UTAMA === */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card className="shadow-sm rounded-xl border-border/60 bg-gradient-to-br from-card to-card/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -256,7 +832,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tracking-tight">
-              {formatRupiah(totalPendapatan)}
+              {formatCurrency(totalPendapatan, mataUang)}
             </div>
             <p className="text-xs font-medium mt-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
               <TrendingUp className="w-3.5 h-3.5" /> +20.1%{" "}
@@ -284,7 +860,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Berhasil dicairkan bulan ini
+              Berhasil dicairkan dalam rentang aktif
             </p>
           </CardContent>
         </Card>
@@ -336,7 +912,6 @@ export default function DashboardPage() {
 
       {/* === BAGIAN TENGAH: CHARTS === */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-7 items-start">
-        {/* GRAFIK BAR PENDAPATAN */}
         <Card className="shadow-sm rounded-xl border-border/60 lg:col-span-5 h-full flex flex-col">
           <CardHeader>
             <CardTitle>Arus Kas Pendapatan</CardTitle>
@@ -366,7 +941,7 @@ export default function DashboardPage() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={formatYAxis}
-                  width={50}
+                  width={60}
                   className="text-[11px] text-muted-foreground font-medium"
                 />
                 <ChartTooltip
@@ -374,7 +949,9 @@ export default function DashboardPage() {
                   content={
                     <ChartTooltipContent
                       hideLabel={false}
-                      formatter={(value) => formatRupiah(value as number)}
+                      formatter={(value) =>
+                        formatCurrency(value as number, mataUang)
+                      }
                     />
                   }
                 />
@@ -388,9 +965,8 @@ export default function DashboardPage() {
             </ChartContainer>
           </CardContent>
         </Card>
-        {/* GRAFIK DONUT & TOP KLIEN */}
+
         <div className="lg:col-span-2 space-y-6 flex flex-col h-full">
-          {/* Donut Chart Status */}
           <Card className="shadow-sm rounded-xl border-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Distribusi Status</CardTitle>
@@ -428,7 +1004,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Top Clients */}
           <Card className="shadow-sm rounded-xl border-border/60 flex-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -445,7 +1020,6 @@ export default function DashboardPage() {
                     <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                       {client.name.charAt(0)}
                     </div>
-                    {/* truncate di sini untuk memastikan nama kepotong menjadi ... jika terlalu panjang */}
                     <span
                       className="text-sm font-medium truncate min-w-0"
                       title={client.name}
@@ -454,7 +1028,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <span className="text-sm font-semibold shrink-0">
-                    {formatRupiah(client.total)}
+                    {formatCurrency(client.total, mataUang)}
                   </span>
                 </div>
               ))}
@@ -499,7 +1073,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="p-6">
-              {/* TAB CONTENT: TERBARU */}
               <TabsContent value="terbaru" className="space-y-0 mt-0">
                 {aktivitasTerbaru.map((item: Invoice, index: number) => (
                   <div
@@ -522,7 +1095,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 mt-3 sm:mt-0 shrink-0">
                       <div className="font-bold text-sm">
-                        {item.totalAmount}
+                        {convertAndFormat(item.totalAmount)}
                       </div>
                       <Badge
                         variant="outline"
@@ -535,7 +1108,6 @@ export default function DashboardPage() {
                 ))}
               </TabsContent>
 
-              {/* TAB CONTENT: JATUH TEMPO */}
               <TabsContent value="mendesak" className="space-y-0 mt-0">
                 {tagihanMendesak.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
@@ -570,15 +1142,15 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-4 mt-3 sm:mt-0 ml-14 sm:ml-0 shrink-0">
                         <div className="font-bold text-sm">
-                          {item.totalAmount}
+                          {convertAndFormat(item.totalAmount)}
                         </div>
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-8 text-xs font-semibold rounded-md"
-                          onClick={() => navigate("/transaction")}
+                          className="h-8 text-xs font-semibold rounded-md gap-1.5 flex items-center"
+                          onClick={() => handleKirimEmailReminder(item)}
                         >
-                          Tindak Lanjuti
+                          <Mail className="w-3.5 h-3.5" /> Tindak Lanjuti
                         </Button>
                       </div>
                     </div>

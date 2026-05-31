@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Users,
@@ -11,6 +11,7 @@ import {
   Trash2,
   AlertCircle,
   Check,
+  Wallet, // Tambahan icon untuk nilai transaksi
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -63,7 +64,7 @@ import {
 } from "~/components/ui/select";
 
 // ==========================================
-// TIPE DATA KLIEN
+// TIPE DATA KLIEN (Ditambah totalSpent)
 // ==========================================
 export type Client = {
   id: string;
@@ -72,6 +73,26 @@ export type Client = {
   phone: string;
   status: "Aktif" | "Non-aktif";
   totalInvoices: number;
+  totalSpent: number; // Properti baru untuk menyimpan nominal uang
+};
+
+// ==========================================
+// KONFIGURASI KONVERSI MATA UANG
+// ==========================================
+const EXCHANGE_RATE_USD = 16000;
+
+const parseCurrencyToNumber = (currencyString: string) => {
+  return parseInt(currencyString.replace(/[^0-9]/g, ""), 10) || 0;
+};
+
+const formatCurrency = (angka: number, currencyCode: string) => {
+  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
+    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
+  }).format(angka);
 };
 
 // ==========================================
@@ -80,6 +101,9 @@ export type Client = {
 const extractInitialClients = (): Client[] => {
   const clientMap = new Map<string, Client>();
   dataAwal.forEach((inv) => {
+    // Ambil nominal dasar dalam rupiah
+    const amount = parseCurrencyToNumber(inv.totalAmount);
+
     if (!clientMap.has(inv.clientEmail)) {
       clientMap.set(inv.clientEmail, {
         id: `CL-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
@@ -88,10 +112,12 @@ const extractInitialClients = (): Client[] => {
         phone: "-",
         status: "Aktif",
         totalInvoices: 1,
+        totalSpent: amount, // Simpan pengeluaran perdana
       });
     } else {
       const existingClient = clientMap.get(inv.clientEmail)!;
       existingClient.totalInvoices += 1;
+      existingClient.totalSpent += amount; // Akumulasi pengeluaran
     }
   });
   return Array.from(clientMap.values());
@@ -101,7 +127,28 @@ export default function ClientsPage() {
   const navigate = useNavigate();
 
   // ==========================================
-  // STATE UTAMA (MENIRU HOME.TSX)
+  // STATE MATA UANG (DINAMIS DARI SETTING)
+  // ==========================================
+  const [mataUang, setMataUang] = useState("IDR");
+
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("adminSettings");
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      if (parsed?.preferensi?.mataUang) {
+        setMataUang(parsed.preferensi.mataUang);
+      }
+    }
+  }, []);
+
+  // Fungsi utilitas praktis untuk merender uang sesuai preferensi
+  const convertAndFormat = (rawIdr: number) => {
+    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+    return formatCurrency(finalValue, mataUang);
+  };
+
+  // ==========================================
+  // STATE UTAMA
   // ==========================================
   const [clients, setClients] = useState<Client[]>(extractInitialClients());
   const [kataKunci, setKataKunci] = useState("");
@@ -121,6 +168,7 @@ export default function ClientsPage() {
     phone: "",
     status: "Aktif",
     totalInvoices: 0,
+    totalSpent: 0,
   });
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -144,8 +192,10 @@ export default function ClientsPage() {
   const dataNonAktif = clients.filter(
     (item) => item.status === "Non-aktif",
   ).length;
-  const totalTransaksi = clients.reduce(
-    (acc, curr) => acc + curr.totalInvoices,
+
+  // Total akumulasi uang dari semua klien terdaftar
+  const totalNilaiTransaksi = clients.reduce(
+    (acc, curr) => acc + curr.totalSpent,
     0,
   );
 
@@ -167,6 +217,7 @@ export default function ClientsPage() {
       phone: "",
       status: "Aktif",
       totalInvoices: 0,
+      totalSpent: 0,
     });
     setIsDialogOpen(true);
   };
@@ -301,7 +352,7 @@ export default function ClientsPage() {
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
           Kelola database pelanggan dan perusahaan Anda. Pantau status keaktifan
-          dan jumlah transaksi yang terikat dengan setiap klien secara
+          dan akumulasi nilai transaksi yang terikat dengan setiap klien secara
           real-time.
         </p>
       </div>
@@ -309,7 +360,7 @@ export default function ClientsPage() {
       {/* ==========================================
           OVERVIEW CARDS (METRIK)
       ========================================== */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 gap-4">
         {/* Card: Total Klien */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0 w-fit mb-3">
@@ -347,16 +398,20 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* Card: Total Transaksi Terikat */}
+        {/* Card: Total Transaksi Terikat (Diubah menampilkan nominal uang) */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-sky-500/10 text-sky-500 rounded-xl shrink-0 w-fit mb-3">
-            <FileText className="w-6 h-6" />
+            <Wallet className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {totalTransaksi}
+          {/* Implementasi Format Uang Dinamis di Card */}
+          <div
+            className="text-xl sm:text-2xl font-bold text-foreground truncate"
+            title={convertAndFormat(totalNilaiTransaksi)}
+          >
+            {convertAndFormat(totalNilaiTransaksi)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Total Invoice Terikat
+            Total Nilai Transaksi Klien
           </div>
         </div>
       </div>
@@ -408,15 +463,21 @@ export default function ClientsPage() {
         </div>
 
         {/* TABEL DATA */}
-        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden">
-          <Table>
+        <div className="border rounded-2xl bg-card shadow-sm overflow-hidden overflow-x-auto">
+          <Table className="min-w-[800px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-[300px] font-semibold">
+                <TableHead className="w-[250px] font-semibold">
                   Informasi Klien
                 </TableHead>
-                <TableHead className="font-semibold">Kontak</TableHead>
-                <TableHead className="font-semibold">Total Invoice</TableHead>
+                <TableHead className="font-semibold w-[200px]">
+                  Kontak
+                </TableHead>
+                <TableHead className="font-semibold text-center w-[100px]">
+                  Invoice
+                </TableHead>
+                {/* Kolom Baru untuk Menampilkan Nominal */}
+                <TableHead className="font-semibold">Nilai Transaksi</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
                 <TableHead className="text-center w-32 font-semibold">
                   Aksi
@@ -427,7 +488,7 @@ export default function ClientsPage() {
               {dataTampil.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center h-32 text-muted-foreground"
                   >
                     Tidak ada data klien ditemukan.
@@ -453,9 +514,15 @@ export default function ClientsPage() {
                         {client.phone}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit">
+                    <TableCell className="text-center">
+                      <div className="font-bold text-foreground mx-auto bg-muted/50 px-3 py-1 rounded-md w-fit">
                         {client.totalInvoices}
+                      </div>
+                    </TableCell>
+                    {/* Implementasi Kolom Mata Uang Dinamis */}
+                    <TableCell>
+                      <div className="font-bold text-foreground">
+                        {convertAndFormat(client.totalSpent)}
                       </div>
                     </TableCell>
                     <TableCell>

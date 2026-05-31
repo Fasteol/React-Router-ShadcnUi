@@ -95,7 +95,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     if (storedUser) {
       setHeaderUser(JSON.parse(storedUser));
     }
-  }, [location.pathname, navigate, isAuthPage, location.pathname]); // akan jalan setiap kali ganti route (URL)
+  }, [location.pathname, navigate, isAuthPage]); // akan jalan setiap kali ganti route (URL)
 
   if (isAuthPage) {
     return (

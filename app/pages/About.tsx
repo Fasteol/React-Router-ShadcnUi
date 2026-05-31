@@ -19,32 +19,35 @@ import {
   User,
   ShieldCheck,
   Zap,
-  HelpCircle,
   Milestone,
   Lock,
-  Download,
   ArrowRightLeft,
   Users,
   Package,
   FileText,
   Settings,
   CreditCard,
+  Globe,
+  LogIn,
+  DownloadCloud,
+  Banknote,
+  Palette,
 } from "lucide-react";
 
 export default function AboutPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-12 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-6xl py-8 mx-auto font-sans flex flex-col gap-12 px-4 xl:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       {/* ==========================================
           HEADER SECTION
       ========================================== */}
       <div className="flex flex-col items-center text-center space-y-4 mt-4">
         <Badge
           variant="secondary"
-          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm"
+          className="px-3 py-1 text-xs font-medium dark:bg-muted/50 border shadow-sm text-primary"
         >
-          Versi 1.2.0 (Ekspansi Modul Bisnis)
+          Versi 2.0.0 (Autentikasi, Ekspor, & Multi-Mata Uang)
         </Badge>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
           Tentang Sistem Invoice & Manajemen
@@ -58,64 +61,88 @@ export default function AboutPage() {
       </div>
 
       {/* ==========================================
-          SECTION: METRIK & STANDAR SISTEM
+          SECTION: PEMBARUAN TERBARU (CHANGELOG)
       ========================================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-foreground">
-              Integritas Data
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Pencatatan akurat & terstruktur
-            </div>
-          </div>
+      <div className="space-y-6">
+        <div className="text-center space-y-2 mb-2">
+          <h2 className="text-2xl font-bold tracking-tight">
+            Sorotan Pembaruan Terbaru
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Fungsionalitas berskala besar yang baru saja ditambahkan ke dalam
+            sistem.
+          </p>
         </div>
-        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0">
-            <Zap className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-foreground">
-              Performa Tinggi
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              icon: LogIn,
+              title: "Autentikasi Lokal",
+              desc: "Sistem Login & Register dengan Virtual Database terenkripsi secara lokal.",
+              color: "text-violet-500",
+              bg: "bg-violet-500/10",
+              borderColor: "border-violet-500/20",
+            },
+            {
+              icon: Banknote,
+              title: "Multi-Mata Uang",
+              desc: "Dukungan penuh konversi IDR ke USD secara real-time pada seluruh modul.",
+              color: "text-emerald-500",
+              bg: "bg-emerald-500/10",
+              borderColor: "border-emerald-500/20",
+            },
+            {
+              icon: DownloadCloud,
+              title: "Ekspor Laporan",
+              desc: "Pembuatan otomatis laporan finansial berformat PDF resmi & Excel (.xlsx).",
+              color: "text-rose-500",
+              bg: "bg-rose-500/10",
+              borderColor: "border-rose-500/20",
+            },
+            {
+              icon: Palette,
+              title: "Kustomisasi Sistem",
+              desc: "Pengaturan identitas bisnis, info rekening, dan preferensi tema Dark/Light.",
+              color: "text-blue-500",
+              bg: "bg-blue-500/10",
+              borderColor: "border-blue-500/20",
+            },
+          ].map((item, idx) => (
+            <div
+              key={idx}
+              className={`flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1 ${item.borderColor}`}
+            >
+              <div
+                className={`p-3 rounded-xl w-fit ${item.bg} ${item.color} mb-4`}
+              >
+                <item.icon className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-foreground text-sm mb-1">
+                {item.title}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {item.desc}
+              </p>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Responsif & minim latensi UI
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-          <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-xl shrink-0">
-            <Lock className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-foreground">
-              Privasi Terjamin
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Sistem tertutup & aman
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
       {/* ==========================================
           SECTION: MODUL SISTEM (Berdasarkan Sidebar)
       ========================================== */}
-      <div className="space-y-4">
+      <div className="space-y-4 border-t pt-10">
         <div className="text-center space-y-2 mb-6">
           <h2 className="text-2xl font-bold tracking-tight">
             Ekosistem Manajemen
           </h2>
           <p className="text-muted-foreground text-sm">
-            Lima pilar utama yang mendukung operasional bisnis Anda.
+            Enam pilar utama yang mendukung keseluruhan operasional bisnis Anda.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {[
             {
               icon: LayoutDashboard,
@@ -152,10 +179,17 @@ export default function AboutPage() {
               color: "text-rose-500",
               bg: "bg-rose-500/10",
             },
+            {
+              icon: Settings,
+              title: "Pengaturan",
+              desc: "Konfigurasi Sistem",
+              color: "text-slate-500",
+              bg: "bg-slate-500/10",
+            },
           ].map((item, idx) => (
             <div
               key={idx}
-              className="flex flex-col items-center p-4 border rounded-2xl bg-card text-center hover:border-primary/50 transition-colors"
+              className="flex flex-col items-center p-4 border rounded-2xl bg-card text-center hover:border-primary/50 transition-colors shadow-sm hover:shadow-md"
             >
               <div className={`p-3 rounded-full ${item.bg} ${item.color} mb-3`}>
                 <item.icon className="w-6 h-6" />
@@ -188,31 +222,41 @@ export default function AboutPage() {
               <CreditCard className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Sistem Invoice Komprehensif:
+                  Sistem Invoice & Combobox Cerdas:
                 </strong>{" "}
-                Mendukung berbagai metode pembayaran (QRIS, ShopeePay, GoPay,
-                Transfer Bank) dengan indikator status dinamis (Lunas, Pending,
-                Gagal).
+                Pembuatan tagihan super cepat dengan fitur penarikan data
+                relasional. Cari klien dan sisipkan layanan dari katalog
+                langsung dalam satu form.
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <Users className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+              <ShieldCheck className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong className="text-foreground">
-                  Relasi Klien & Layanan:
+                  Keamanan Sesi Personal:
                 </strong>{" "}
-                Integrasi mulus antara database klien dan katalog
-                layanan/produk, memudahkan pembuatan tagihan tanpa input
-                berulang.
+                Sistem login terlindungi memastikan bahwa histori pengaturan
+                identitas, bank, dan perusahaan Anda aman dalam isolasi lokal.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <Globe className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong className="text-foreground">
+                  Fleksibilitas Skala Global:
+                </strong>{" "}
+                Pilihan mata uang (IDR & USD) yang secara otomatis menghitung
+                ulang dan menyesuaikan rasio nilai tukar pada kalkulasi
+                dashboard Anda.
               </p>
             </div>
             <div className="flex items-start gap-3">
               <BarChart3 className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="leading-relaxed">
-                <strong className="text-foreground">Analitik Cerdas:</strong>{" "}
-                Pemantauan pendapatan berjalan, analisis klien penyumbang omzet
-                terbesar, dan rasio kesuksesan transaksi secara{" "}
-                <em>real-time</em>.
+                <strong className="text-foreground">Laporan Siap Cetak:</strong>{" "}
+                Tarik rekapitulasi data berdasarkan periode waktu ke dalam
+                format Vector PDF dengan kop surat profesional, atau export ke
+                Excel untuk olah data lanjutan.
               </p>
             </div>
           </CardContent>
@@ -246,7 +290,7 @@ export default function AboutPage() {
                 Shadcn UI
               </Badge>
               <Badge variant="outline" className="rounded-md">
-                Recharts
+                Recharts & XLSX
               </Badge>
               <Badge variant="outline" className="rounded-md">
                 Lucide Icons
@@ -255,18 +299,18 @@ export default function AboutPage() {
 
             <div className="bg-muted/30 p-4 rounded-xl text-sm text-muted-foreground leading-relaxed mt-auto border border-border/50">
               <strong className="text-foreground flex items-center gap-2 mb-2">
-                <LayoutDashboard className="w-4 h-4" /> Prinsip Desain
+                <Palette className="w-4 h-4" /> Tema Dinamis & UX
               </strong>
-              Antarmuka mengusung tema <em>Dark Mode</em> minimalis dengan
-              kontras warna yang disesuaikan (merah untuk gagal, hijau untuk
-              lunas). Desain difokuskan pada keterbacaan data grid dan
-              penggunaan ruang kosong (<em>whitespace</em>) agar pengguna tidak
-              lelah mengelola angka finansial.
+              Kini didukung dengan fitur integrasi{" "}
+              <strong>Dark Mode / Light Mode</strong> yang terikat dengan
+              pengaturan preferensi. Desain difokuskan pada keterbacaan data
+              grid, penggunaan <em>whitespace</em>, serta meminimalisir input
+              manual demi kenyamanan Anda mengelola angka.
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 3: Roadmap Masa Depan */}
+        {/* Card 3: Roadmap Masa Depan (Update) */}
         <Card className="shadow-sm flex flex-col md:col-span-2 rounded-2xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-1">
@@ -278,9 +322,9 @@ export default function AboutPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid sm:grid-cols-3 gap-4 text-sm">
-              <div className="p-5 border rounded-xl bg-card">
-                <div className="flex items-center justify-between mb-4">
+            <div className="grid sm:grid-cols-4 gap-4 text-sm">
+              <div className="p-4 border rounded-xl bg-card">
+                <div className="flex items-center justify-between mb-3">
                   <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-0 shadow-none">
                     Fase 1
                   </Badge>
@@ -289,47 +333,61 @@ export default function AboutPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                  Struktur UI dasar, modul Transaksi, Klien, Layanan, dan
-                  Dashboard analitik statis.
+                  Struktur UI dasar, modul CRUD Transaksi, Klien, Layanan, &
+                  Dashboard awal.
                 </p>
               </div>
 
-              <div className="p-5 border rounded-xl bg-card border-primary/30 shadow-sm relative overflow-hidden group">
+              <div className="p-4 border rounded-xl bg-card">
+                <div className="flex items-center justify-between mb-3">
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-0 shadow-none">
+                    Fase 2
+                  </Badge>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Selesai
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                  Ekspor PDF & Excel, Modul Pengaturan Sistem, & Konversi Mata
+                  Uang.
+                </p>
+              </div>
+
+              <div className="p-4 border rounded-xl bg-card">
+                <div className="flex items-center justify-between mb-3">
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-0 shadow-none">
+                    Fase 3
+                  </Badge>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Selesai
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                  Sistem Autentikasi Relasional, Relasi Data (Combobox), &
+                  Keamanan LocalStorage.
+                </p>
+              </div>
+
+              <div className="p-4 border border-dashed rounded-xl bg-muted/10 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary transition-all group-hover:w-1.5"></div>
-                <div className="flex items-center justify-between mb-4 pl-2">
+                <div className="flex items-center justify-between mb-3 pl-2">
                   <Badge
                     variant="outline"
                     className="border-primary/50 text-primary"
                   >
-                    Fase 2
+                    Fase 4
                   </Badge>
                   <span className="font-bold text-primary text-xs flex items-center gap-1.5">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                     </span>
-                    Berjalan
+                    Proses
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed pl-2 font-medium">
-                  Fungsionalitas ekspor/unduh laporan finansial, validasi form
-                  tingkat lanjut, dan interaktivitas chart.
-                </p>
-              </div>
-
-              <div className="p-5 border border-dashed rounded-xl bg-muted/10">
-                <div className="flex items-center justify-between mb-4">
-                  <Badge variant="outline" className="text-muted-foreground">
-                    Fase 3
-                  </Badge>
-                  <span className="font-semibold text-muted-foreground text-xs">
-                    Direncanakan
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                  Integrasi <em>Backend</em> (Supabase/Node.js) untuk
-                  sinkronisasi <em>cloud</em>, autentikasi multi-user, dan
-                  notifikasi email klien.
+                <p className="text-xs text-muted-foreground leading-relaxed font-medium pl-2">
+                  Integrasi Backend Database (Supabase/Node.js) & Pengiriman
+                  Invoice ke Email otomatis.
                 </p>
               </div>
             </div>
@@ -375,7 +433,7 @@ export default function AboutPage() {
       {/* ==========================================
           FOOTER / CALL TO ACTION
       ========================================== */}
-      <div className="flex flex-col sm:flex-row items-center justify-center mt-4 border-t pt-8 gap-4 pb-8">
+      <div className="flex flex-col sm:flex-row items-center justify-center mt-4 border-t pt-8 gap-4">
         <Button
           onClick={() => navigate("/")}
           variant="ghost"

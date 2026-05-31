@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -67,6 +67,21 @@ import {
 } from "~/components/ui/select";
 
 // ==========================================
+// KONFIGURASI KONVERSI MATA UANG
+// ==========================================
+const EXCHANGE_RATE_USD = 16000;
+
+const formatCurrency = (angka: number, currencyCode: string) => {
+  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
+    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
+  }).format(angka);
+};
+
+// ==========================================
 // FUNGSI GENERATOR ID LAYANAN OTOMATIS
 // ==========================================
 const generateServiceID = (dataServices: Service[]) => {
@@ -91,6 +106,27 @@ const generateServiceID = (dataServices: Service[]) => {
 export default function ServicesPage() {
   const navigate = useNavigate();
 
+  // ==========================================
+  // STATE MATA UANG (DINAMIS DARI SETTING)
+  // ==========================================
+  const [mataUang, setMataUang] = useState("IDR");
+
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("adminSettings");
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      if (parsed?.preferensi?.mataUang) {
+        setMataUang(parsed.preferensi.mataUang);
+      }
+    }
+  }, []);
+
+  // Fungsi utilitas untuk konversi format sesuai mata uang yang aktif
+  const convertAndFormat = (rawIdr: number) => {
+    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+    return formatCurrency(finalValue, mataUang);
+  };
+
   const [services, setServices] = useState<Service[]>(dataLayanan);
   const [kataKunci, setKataKunci] = useState("");
   const [halamanSaatIni, setHalamanSaatIni] = useState(1);
@@ -100,13 +136,13 @@ export default function ServicesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<"tambah" | "edit">("tambah");
 
-  // State khusus untuk visual input (menampilkan "Rp ...")
+  // State khusus untuk visual input ("Rp ..." atau "$ ...")
   const [inputHarga, setInputHarga] = useState("Rp ");
   const [formData, setFormData] = useState<Service>({
     id: "",
     nama: "",
     deskripsi: "",
-    harga: 0, // Disimpan sebagai number sesuai tipe Service di invoices.ts
+    harga: 0, // Disimpan sebagai nilai raw IDR
   });
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -148,15 +184,23 @@ export default function ServicesPage() {
       deskripsi: "",
       harga: 0,
     });
-    setInputHarga("Rp "); // Reset input visual
+    // Set prefix dinamis
+    setInputHarga(mataUang === "USD" ? "$ " : "Rp ");
     setIsDialogOpen(true);
   };
 
   const bukaFormEdit = (dataAsli: Service) => {
     setFormMode("edit");
     setFormData(dataAsli);
-    // Format input visual menjadi Rp XXX.XXX saat mode edit
-    setInputHarga(`Rp ${dataAsli.harga.toLocaleString("id-ID")}`);
+
+    // Format input visual menyesuaikan mata uang
+    if (mataUang === "USD") {
+      const usdValue = dataAsli.harga / EXCHANGE_RATE_USD;
+      setInputHarga(`$ ${usdValue}`);
+    } else {
+      setInputHarga(`Rp ${dataAsli.harga.toLocaleString("id-ID")}`);
+    }
+
     setIsDialogOpen(true);
   };
 
@@ -165,7 +209,8 @@ export default function ServicesPage() {
       !formData.nama ||
       !formData.deskripsi ||
       formData.harga === 0 ||
-      inputHarga === "Rp "
+      inputHarga.trim() === "$" ||
+      inputHarga.trim() === "Rp"
     ) {
       toast.error(
         "Gagal! Pastikan nama, deskripsi, dan harga diisi dengan benar.",
@@ -212,22 +257,41 @@ export default function ServicesPage() {
   };
 
   // ==========================================
-  // HANDLER FORMAT HARGA (Mirip Transaksi)
+  // HANDLER FORMAT HARGA DINAMIS (IDR / USD)
   // ==========================================
   const handleUbahHarga = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const angkaSaja = e.target.value.replace(/[^0-9]/g, "");
+    const rawString = e.target.value;
 
-    if (angkaSaja === "") {
-      setInputHarga("Rp ");
-      setFormData({ ...formData, harga: 0 });
+    if (mataUang === "USD") {
+      // Mengizinkan angka dan satu titik desimal untuk USD
+      let sanitized = rawString.replace(/[^0-9.]/g, "");
+      const parts = sanitized.split(".");
+      if (parts.length > 2) {
+        sanitized = parts[0] + "." + parts.slice(1).join("");
+      }
+
+      if (sanitized === "") {
+        setInputHarga("$ ");
+        setFormData({ ...formData, harga: 0 });
+      } else {
+        setInputHarga(`$ ${sanitized}`);
+        const parsedUsd = parseFloat(sanitized) || 0;
+        // Konversi input USD kembali ke base IDR untuk disimpan
+        setFormData({ ...formData, harga: parsedUsd * EXCHANGE_RATE_USD });
+      }
     } else {
-      const parsedNumber = parseInt(angkaSaja, 10);
-      const formatRupiah = parsedNumber.toLocaleString("id-ID");
+      // Hanya mengizinkan angka bulat untuk IDR
+      const angkaSaja = rawString.replace(/[^0-9]/g, "");
 
-      // Simpan format "Rp XXX.XXX" untuk visual di form
-      setInputHarga(`Rp ${formatRupiah}`);
-      // Simpan angka murni ke dalam state formData.harga
-      setFormData({ ...formData, harga: parsedNumber });
+      if (angkaSaja === "") {
+        setInputHarga("Rp ");
+        setFormData({ ...formData, harga: 0 });
+      } else {
+        const parsedNumber = parseInt(angkaSaja, 10);
+        const formatRupiah = parsedNumber.toLocaleString("id-ID");
+        setInputHarga(`Rp ${formatRupiah}`);
+        setFormData({ ...formData, harga: parsedNumber });
+      }
     }
   };
 
@@ -331,20 +395,23 @@ export default function ServicesPage() {
           </div>
         </div>
 
-        {/* Card: Rata-rata Harga */}
+        {/* Card: Rata-rata Harga (Dinamis) */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0 w-fit mb-3">
             <TrendingUp className="w-6 h-6" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            Rp {rataRataHarga.toLocaleString("id-ID")}
+          <div
+            className="text-2xl font-bold text-foreground truncate"
+            title={convertAndFormat(rataRataHarga)}
+          >
+            {convertAndFormat(rataRataHarga)}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             Rata-rata Harga Pasar
           </div>
         </div>
 
-        {/* Card: Layanan Premium */}
+        {/* Card: Layanan Premium (Dinamis) */}
         <div className="flex flex-col p-5 border rounded-2xl bg-card shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
           <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl shrink-0 w-fit mb-3">
             <Star className="w-6 h-6" />
@@ -353,7 +420,7 @@ export default function ServicesPage() {
             {layananPremium}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Layanan Premium (≥ Rp 3.000.000)
+            Layanan Premium (≥ {convertAndFormat(3000000)})
           </div>
         </div>
       </div>
@@ -396,7 +463,7 @@ export default function ServicesPage() {
                 </TableHead>
                 <TableHead className="font-semibold">Deskripsi</TableHead>
                 <TableHead className="text-right font-semibold">
-                  Harga (Rp)
+                  Harga ({mataUang})
                 </TableHead>
                 <TableHead className="text-center w-32 font-semibold">
                   Aksi
@@ -436,8 +503,9 @@ export default function ServicesPage() {
                       </p>
                     </TableCell>
                     <TableCell className="text-right">
+                      {/* Tampilan nilai uang format dinamis di Tabel */}
                       <div className="font-bold text-foreground bg-muted/50 px-3 py-1 rounded-md w-fit ml-auto">
-                        Rp {layanan.harga.toLocaleString("id-ID")}
+                        {convertAndFormat(layanan.harga)}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -604,14 +672,14 @@ export default function ServicesPage() {
                 />
               </div>
 
-              {/* HARGA LAYANAN */}
+              {/* HARGA LAYANAN (Dinamis Berdasarkan Mata Uang) */}
               <div className="grid gap-2">
                 <Label htmlFor="harga" className="font-semibold">
-                  Harga Patokan (Rp)
+                  Harga Patokan ({mataUang})
                 </Label>
                 <Input
                   id="harga"
-                  placeholder="Rp 0"
+                  placeholder={mataUang === "USD" ? "$ 0" : "Rp 0"}
                   value={inputHarga}
                   onChange={handleUbahHarga}
                   className="font-bold rounded-xl text-lg h-12 bg-primary/5 border-primary/20 text-primary focus-visible:ring-primary/30"

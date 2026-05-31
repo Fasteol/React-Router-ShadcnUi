@@ -8,12 +8,9 @@ export type Invoice = {
   paymentMethod: string;
   date: string;
   dueDate: string;
-  services: Service[]; // properti baru untuk menyimpan detail layanan transaksi
+  services: Service[];
 };
 
-// ==========================================
-// DATA PENGATURAN ADMIN (USER)
-// ==========================================
 export type AdminSettings = {
   profil: {
     nama: string;
@@ -36,21 +33,18 @@ export type AdminSettings = {
   };
 };
 
-// ==========================================
-// DATA PENGGUNA (USERS) UNTUK SISTEM AUTH
-// ==========================================
 export type User = {
   id: string;
   name: string;
   email: string;
-  password: string; // Dalam dunia nyata ini di-hash, tapi untuk dummy kita simpan teks biasa
+  password: string;
 };
 
 export type Service = {
   id: string;
   nama: string;
   deskripsi: string;
-  harga: number; // Simpan sebagai number untuk kemudahan kalkulasi
+  harga: number;
 };
 
 export const defaultAdminSettings: AdminSettings = {
@@ -75,9 +69,6 @@ export const defaultAdminSettings: AdminSettings = {
   },
 };
 
-// ==========================================
-// GENERATOR DATA INVOICE
-// ==========================================
 const pilihanStatus = ["Lunas", "Pending", "Belum Bayar", "Gagal"];
 const pilihanMetode = [
   "Transfer Bank",
@@ -94,7 +85,7 @@ export const defaultUsers: User[] = [
     id: "USR-001",
     name: "Razan Muhammad Fauzan Sya'bani",
     email: "razan@fauzansyabani.dev",
-    password: "password123", // Password default untuk testing
+    password: "password123",
   },
 ];
 
@@ -153,7 +144,6 @@ export const dataAwal: Invoice[] = Array.from({ length: 100 }).map(
     const klienAcak =
       daftarKlien[Math.floor(Math.random() * daftarKlien.length)];
 
-    // Mengambil 1 hingga 3 layanan acak secara unik untuk setiap invoice
     const jumlahLayanan = Math.floor(Math.random() * 3) + 1;
     const layananTerpilih: Service[] = [];
     const salinanLayanan = [...dataLayanan].sort(() => 0.5 - Math.random());
@@ -164,7 +154,6 @@ export const dataAwal: Invoice[] = Array.from({ length: 100 }).map(
       }
     }
 
-    // Kalkulasi nominal string otomatis berdasarkan total harga layanan terpilih
     const nominalAngka = layananTerpilih.reduce(
       (acc, curr) => acc + curr.harga,
       0,

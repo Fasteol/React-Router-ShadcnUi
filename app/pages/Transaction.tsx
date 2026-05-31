@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Check,
@@ -90,6 +90,33 @@ import {
 } from "~/components/ui/popover";
 
 // ==========================================
+// KONFIGURASI KONVERSI MATA UANG
+// ==========================================
+const EXCHANGE_RATE_USD = 16000;
+
+const parseCurrencyToNumber = (currencyString: string) => {
+  if (!currencyString) return 0;
+  const str = String(currencyString);
+  // Cek apakah string mengandung format USD
+  if (str.includes("$") || str.includes("USD")) {
+    const numericPart = str.replace(/[^0-9.]/g, ""); // Pertahankan titik untuk desimal
+    return Math.round(parseFloat(numericPart) * EXCHANGE_RATE_USD) || 0;
+  }
+  // Parsing default untuk IDR
+  return parseInt(str.replace(/[^0-9]/g, ""), 10) || 0;
+};
+
+const formatCurrency = (angka: number, currencyCode: string) => {
+  const locale = currencyCode === "USD" ? "en-US" : "id-ID";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    minimumFractionDigits: currencyCode === "USD" ? 2 : 0,
+    maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
+  }).format(angka);
+};
+
+// ==========================================
 // FUNGSI GENERATOR ID INVOICE OTOMATIS
 // ==========================================
 const generateInvoiceID = (dataInvoices: Invoice[]) => {
@@ -123,6 +150,26 @@ const generateInvoiceID = (dataInvoices: Invoice[]) => {
 export default function TransactionPage() {
   const navigate = useNavigate();
 
+  // ==========================================
+  // STATE MATA UANG (DINAMIS DARI SETTING)
+  // ==========================================
+  const [mataUang, setMataUang] = useState("IDR");
+
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("adminSettings");
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      if (parsed?.preferensi?.mataUang) {
+        setMataUang(parsed.preferensi.mataUang);
+      }
+    }
+  }, []);
+
+  const convertAndFormat = (rawIdr: number) => {
+    const finalValue = mataUang === "USD" ? rawIdr / EXCHANGE_RATE_USD : rawIdr;
+    return formatCurrency(finalValue, mataUang);
+  };
+
   const [invoices, setInvoices] = useState<Invoice[]>(dataAwal);
   const [kataKunci, setKataKunci] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua");
@@ -151,7 +198,7 @@ export default function TransactionPage() {
     totalAmount: "",
     date: "",
     dueDate: "",
-    services: [], // Pastikan data layanan disertakan di state awal
+    services: [],
   });
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -211,7 +258,7 @@ export default function TransactionPage() {
       clientEmail: "",
       paymentStatus: "Pending",
       paymentMethod: "Transfer Bank",
-      totalAmount: "Rp ",
+      totalAmount: mataUang === "USD" ? "$ 0.00" : "Rp 0",
       date: tglDibuat,
       dueDate: tglJatuhTempo,
       services: [],
@@ -232,7 +279,8 @@ export default function TransactionPage() {
       !formData.clientName ||
       !formData.paymentStatus ||
       !formData.totalAmount ||
-      formData.totalAmount === "Rp "
+      formData.totalAmount === "Rp " ||
+      formData.totalAmount === "$ 0.00"
     ) {
       toast.error("Gagal! Kolom utama wajib diisi dengan benar.");
       return;
@@ -289,11 +337,14 @@ export default function TransactionPage() {
   const hitungTotalLayanan = (layananSaatIni: Service[]) => {
     const total = layananSaatIni.reduce((acc, curr) => acc + curr.harga, 0);
     if (total === 0) {
-      setFormData({ ...formData, totalAmount: "Rp " });
+      setFormData({
+        ...formData,
+        totalAmount: mataUang === "USD" ? "$ 0.00" : "Rp 0",
+      });
     } else {
       setFormData({
         ...formData,
-        totalAmount: `Rp ${total.toLocaleString("id-ID")}`,
+        totalAmount: convertAndFormat(total),
       });
     }
   };
@@ -313,12 +364,19 @@ export default function TransactionPage() {
   };
 
   const handleUbahNominal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const angkaSaja = e.target.value.replace(/[^0-9]/g, "");
-    if (angkaSaja === "") {
-      setFormData({ ...formData, totalAmount: "Rp " });
+    const val = e.target.value;
+
+    if (mataUang === "USD") {
+      // Izinkan teks bebas jika USD (agar pengguna bisa mengetik desimal dengan mudah)
+      setFormData({ ...formData, totalAmount: val });
     } else {
-      const formatRupiah = parseInt(angkaSaja, 10).toLocaleString("id-ID");
-      setFormData({ ...formData, totalAmount: `Rp ${formatRupiah}` });
+      const angkaSaja = val.replace(/[^0-9]/g, "");
+      if (angkaSaja === "") {
+        setFormData({ ...formData, totalAmount: "Rp 0" });
+      } else {
+        const formatRupiah = parseInt(angkaSaja, 10).toLocaleString("id-ID");
+        setFormData({ ...formData, totalAmount: `Rp ${formatRupiah}` });
+      }
     }
   };
 
@@ -604,7 +662,9 @@ export default function TransactionPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-bold text-foreground">
-                        {invoice.totalAmount}
+                        {convertAndFormat(
+                          parseCurrencyToNumber(invoice.totalAmount),
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -661,7 +721,7 @@ export default function TransactionPage() {
                                       </p>
                                     </div>
                                     <p className="font-bold shrink-0 bg-background px-3 py-1.5 rounded-lg border shadow-sm">
-                                      Rp {svc.harga.toLocaleString("id-ID")}
+                                      {convertAndFormat(svc.harga)}
                                     </p>
                                   </div>
                                 ))}
@@ -925,7 +985,7 @@ export default function TransactionPage() {
                                   {layanan.nama}
                                 </span>
                                 <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-md">
-                                  Rp {layanan.harga.toLocaleString("id-ID")}
+                                  {convertAndFormat(layanan.harga)}
                                 </span>
                               </div>
                             </CommandItem>
@@ -949,7 +1009,7 @@ export default function TransactionPage() {
                         </span>
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="font-bold text-xs bg-muted/50 px-2 py-1 rounded-md">
-                            Rp {layanan.harga.toLocaleString("id-ID")}
+                            {convertAndFormat(layanan.harga)}
                           </span>
                           <button
                             type="button"
@@ -1021,12 +1081,12 @@ export default function TransactionPage() {
               {/* NOMINAL TOTAL */}
               <div className="grid gap-2 pt-2">
                 <Label htmlFor="nominal" className="font-semibold">
-                  Nominal Penagihan Akhir (Rp)
+                  Nominal Penagihan Akhir
                 </Label>
                 <div className="relative">
                   <Input
                     id="nominal"
-                    placeholder="Rp 0"
+                    placeholder={mataUang === "USD" ? "$ 0.00" : "Rp 0"}
                     value={formData.totalAmount}
                     onChange={handleUbahNominal}
                     className="w-full font-bold rounded-xl text-lg h-12 bg-primary/5 border-primary/20 text-primary focus-visible:ring-primary/30"

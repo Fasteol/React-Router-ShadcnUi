@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -20,9 +20,11 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { toast } from "sonner";
-import { defaultAdminSettings } from "~/data/invoices";
+import { type User } from "~/data/invoices"; // Hanya import type User, hilangkan data dummy
 
-// Import Ikon tambahan untuk UI yang lebih premium
+// IMPORT USETHEME UNTUK MENGUBAH TEMA SECARA LANGSUNG
+import { useTheme } from "~/components/theme-provider";
+
 import {
   UserCircle,
   Building,
@@ -40,28 +42,108 @@ import {
   CreditCard,
 } from "lucide-react";
 
+// Kerangka data kosong sebagai fallback jika user belum pernah menyimpan pengaturan
+const emptySettings = {
+  profil: { nama: "", email: "", telepon: "", avatar: "" },
+  perusahaan: { nama: "", alamat: "" },
+  rekening: { namaBank: "", nomor: "", pemilik: "" },
+  preferensi: { tema: "system", mataUang: "IDR", notifikasiEmail: true },
+};
+
 export default function SettingsPage() {
-  // ==========================================
-  // STATE PENGATURAN
-  // ==========================================
-  const [profil, setProfil] = useState(defaultAdminSettings.profil);
-  const [perusahaan, setPerusahaan] = useState(defaultAdminSettings.perusahaan);
-  const [rekening, setRekening] = useState(defaultAdminSettings.rekening);
-  const [preferensi, setPreferensi] = useState(defaultAdminSettings.preferensi);
+  const { theme, setTheme } = useTheme();
 
-  // Layout State untuk Menu Samping (Sidebar Tabs)
+  const [profil, setProfil] = useState(emptySettings.profil);
+  const [perusahaan, setPerusahaan] = useState(emptySettings.perusahaan);
+  const [rekening, setRekening] = useState(emptySettings.rekening);
+  const [preferensi, setPreferensi] = useState(emptySettings.preferensi);
+
   const [activeTab, setActiveTab] = useState("profil");
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // ==========================================
-  // HANDLER SIMPAN
-  // ==========================================
-  const handleSimpan = (kategori: string) => {
+  useEffect(() => {
+    // 1. Ambil pengaturan dari storage, atau gunakan template kosong jika belum ada
+    const savedSettings = localStorage.getItem("adminSettings");
+    const currentSettings = savedSettings
+      ? JSON.parse(savedSettings)
+      : JSON.parse(JSON.stringify(emptySettings)); // Deep copy agar tidak mereferensikan object asli
+
+    // 2. Ambil data user yang sedang aktif (login)
+    const activeUserStr = localStorage.getItem("currentUser");
+
+    if (activeUserStr) {
+      const activeUser = JSON.parse(activeUserStr);
+      // Timpa data profil dengan data aktual dari akun (jika tersedia)
+      currentSettings.profil.nama =
+        activeUser.name || currentSettings.profil.nama;
+      currentSettings.profil.email =
+        activeUser.email || currentSettings.profil.email;
+      currentSettings.profil.telepon =
+        activeUser.phone || currentSettings.profil.telepon;
+    }
+
+    // 3. Sesuaikan preferensi tema dengan sistem/UI
+    currentSettings.preferensi.tema = theme || currentSettings.preferensi.tema;
+
+    // 4. Set ke state React
+    setProfil(currentSettings.profil);
+    setPerusahaan(currentSettings.perusahaan);
+    setRekening(currentSettings.rekening);
+    setPreferensi(currentSettings.preferensi);
+    setIsLoaded(true);
+  }, [theme]);
+
+  const handleSimpan = (kategori: string, overrideData?: any) => {
+    const updatedSettings = {
+      profil,
+      perusahaan,
+      rekening,
+      preferensi: overrideData?.preferensi || preferensi,
+    };
+
+    // Simpan seluruh konfigurasi pengaturan
+    localStorage.setItem("adminSettings", JSON.stringify(updatedSettings));
+
+    // Khusus untuk profil personal, kita juga harus update data user di sistem (Sesi & Database)
+    if (kategori === "Profil Personal") {
+      const savedUserStr = localStorage.getItem("currentUser");
+      if (savedUserStr) {
+        const parsedUser = JSON.parse(savedUserStr);
+
+        // Update sesi saat ini
+        parsedUser.name = profil.nama;
+        parsedUser.email = profil.email;
+        parsedUser.phone = profil.telepon;
+
+        localStorage.setItem("currentUser", JSON.stringify(parsedUser));
+
+        // Update juga ke Database Virtual (users_db) agar sinkron
+        const usersDB: User[] = JSON.parse(
+          localStorage.getItem("users_db") || "[]",
+        );
+        const updatedUsersDB = usersDB.map((user) => {
+          if (user.id === parsedUser.id) {
+            return {
+              ...user,
+              name: profil.nama,
+              email: profil.email,
+              phone: profil.telepon,
+            };
+          }
+          return user;
+        });
+        localStorage.setItem("users_db", JSON.stringify(updatedUsersDB));
+
+        // Trigger event agar komponen lain (seperti Header) dapat me-render ulang profil
+        window.dispatchEvent(new Event("user-updated"));
+      }
+    }
+
     toast.success(`Pengaturan ${kategori} berhasil diperbarui.`, {
       description: "Perubahan telah disimpan ke dalam sistem.",
     });
   };
 
-  // Menu Sidebar Navigasi
   const menuItems = [
     { id: "profil", label: "Profil Personal", icon: UserCircle },
     { id: "bisnis", label: "Informasi Bisnis", icon: Building },
@@ -69,9 +151,10 @@ export default function SettingsPage() {
     { id: "preferensi", label: "Sistem & Tampilan", icon: Palette },
   ];
 
+  if (!isLoaded) return null;
+
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 xl:px-0 space-y-8 animate-in fade-in duration-500">
-      {/* HEADER SECTION */}
       <div className="space-y-2 pb-6 border-b border-border/50">
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
           Pengaturan Sistem
@@ -83,9 +166,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
-        {/* ==========================================
-            SIDEBAR NAVIGATION
-        ========================================== */}
         <aside className="w-full md:w-56 lg:w-64 shrink-0">
           <nav className="flex md:flex-col gap-1 overflow-x-auto pb-4 md:pb-0 scrollbar-none">
             {menuItems.map((item) => (
@@ -111,9 +191,6 @@ export default function SettingsPage() {
           </nav>
         </aside>
 
-        {/* ==========================================
-            MAIN CONTENT AREA
-        ========================================== */}
         <main className="flex-1 max-w-3xl min-h-[500px]">
           {/* --- TAB: PROFIL --- */}
           {activeTab === "profil" && (
@@ -129,11 +206,12 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                  {/* Foto Profil Placeholder */}
                   <div className="flex items-center gap-6">
                     <div className="relative">
                       <div className="w-20 h-20 bg-gradient-to-tr from-primary/20 to-primary/5 text-primary rounded-full flex items-center justify-center text-2xl font-bold border-2 border-background ring-2 ring-primary/20 shadow-sm">
-                        {profil.nama.charAt(0).toUpperCase()}
+                        {profil.nama
+                          ? profil.nama.charAt(0).toUpperCase()
+                          : "U"}
                       </div>
                       <button className="absolute bottom-0 right-0 p-1.5 bg-background border rounded-full text-muted-foreground hover:text-foreground shadow-sm transition-colors cursor-pointer">
                         <Camera className="w-3.5 h-3.5" />
@@ -192,6 +270,7 @@ export default function SettingsPage() {
                         </Label>
                         <Input
                           id="telepon"
+                          placeholder="Belum ditambahkan"
                           value={profil.telepon}
                           onChange={(e) =>
                             setProfil({ ...profil, telepon: e.target.value })
@@ -242,6 +321,7 @@ export default function SettingsPage() {
                     </Label>
                     <Input
                       id="namaPerusahaan"
+                      placeholder="Cth: PT Inovasi Maju"
                       value={perusahaan.nama}
                       onChange={(e) =>
                         setPerusahaan({ ...perusahaan, nama: e.target.value })
@@ -258,6 +338,7 @@ export default function SettingsPage() {
                     </Label>
                     <Textarea
                       id="alamat"
+                      placeholder="Masukkan alamat bisnis Anda..."
                       rows={4}
                       value={perusahaan.alamat}
                       onChange={(e) =>
@@ -303,10 +384,10 @@ export default function SettingsPage() {
                       <CreditCard className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                       <div>
                         <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                          {rekening.namaBank}
+                          {rekening.namaBank || "NAMA BANK"}
                         </p>
                         <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 font-mono mt-0.5">
-                          {rekening.nomor}
+                          {rekening.nomor || "XXXX-XXXX-XXXX"}
                         </p>
                       </div>
                     </div>
@@ -322,6 +403,7 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="namaBank"
+                        placeholder="Cth: BCA / GoPay"
                         value={rekening.namaBank}
                         onChange={(e) =>
                           setRekening({ ...rekening, namaBank: e.target.value })
@@ -338,6 +420,7 @@ export default function SettingsPage() {
                       </Label>
                       <Input
                         id="nomorRekening"
+                        placeholder="Masukkan nomor"
                         value={rekening.nomor}
                         onChange={(e) =>
                           setRekening({ ...rekening, nomor: e.target.value })
@@ -355,6 +438,7 @@ export default function SettingsPage() {
                     </Label>
                     <Input
                       id="pemilikRekening"
+                      placeholder="Atas nama..."
                       value={rekening.pemilik}
                       onChange={(e) =>
                         setRekening({ ...rekening, pemilik: e.target.value })
@@ -382,7 +466,6 @@ export default function SettingsPage() {
           {/* --- TAB: PREFERENSI --- */}
           {activeTab === "preferensi" && (
             <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-              {/* Card Tema & Regional */}
               <Card className="rounded-xl shadow-sm border-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
                   <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -404,9 +487,14 @@ export default function SettingsPage() {
                     </div>
                     <Select
                       value={preferensi.tema}
-                      onValueChange={(val) =>
-                        setPreferensi({ ...preferensi, tema: val })
-                      }
+                      onValueChange={(val) => {
+                        const newPreferensi = { ...preferensi, tema: val };
+                        setPreferensi(newPreferensi);
+                        setTheme(val as "light" | "dark" | "system");
+                        handleSimpan("Tema Antarmuka", {
+                          preferensi: newPreferensi,
+                        });
+                      }}
                     >
                       <SelectTrigger className="w-full sm:w-[220px] rounded-lg">
                         <SelectValue placeholder="Pilih Tema" />
@@ -443,9 +531,13 @@ export default function SettingsPage() {
                     </div>
                     <Select
                       value={preferensi.mataUang}
-                      onValueChange={(val) =>
-                        setPreferensi({ ...preferensi, mataUang: val })
-                      }
+                      onValueChange={(val) => {
+                        const newPreferensi = { ...preferensi, mataUang: val };
+                        setPreferensi(newPreferensi);
+                        handleSimpan("Mata Uang", {
+                          preferensi: newPreferensi,
+                        });
+                      }}
                     >
                       <SelectTrigger className="w-full sm:w-[220px] rounded-lg font-mono">
                         <SelectValue placeholder="Pilih Mata Uang" />
@@ -457,15 +549,6 @@ export default function SettingsPage() {
                     </Select>
                   </div>
                 </CardContent>
-                <CardFooter className="border-t bg-muted/20 px-6 py-4 flex items-center justify-end">
-                  <Button
-                    onClick={() => handleSimpan("Antarmuka")}
-                    size="sm"
-                    className="gap-2 rounded-lg"
-                  >
-                    <Save className="w-4 h-4" /> Terapkan Tampilan
-                  </Button>
-                </CardFooter>
               </Card>
 
               {/* Card Notifikasi */}
@@ -494,14 +577,16 @@ export default function SettingsPage() {
                       id="email-notif"
                       checked={preferensi.notifikasiEmail}
                       onCheckedChange={(checked) => {
-                        setPreferensi({
+                        const newPreferensi = {
                           ...preferensi,
                           notifikasiEmail: checked,
-                        });
+                        };
+                        setPreferensi(newPreferensi);
                         handleSimpan(
                           checked
                             ? "Notifikasi Diaktifkan"
                             : "Notifikasi Dimatikan",
+                          { preferensi: newPreferensi },
                         );
                       }}
                     />
