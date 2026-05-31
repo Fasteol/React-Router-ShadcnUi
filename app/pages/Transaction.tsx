@@ -334,7 +334,7 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">
-              Pembayaran Gagal
+              Gagal
             </CardTitle>
           </CardHeader>
           <CardContent>
